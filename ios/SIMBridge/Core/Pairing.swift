@@ -39,9 +39,18 @@ struct PairOffer: Equatable {
     }
 }
 
+/// Keychain first; if the Keychain is unavailable (e.g. a build without keychain entitlements),
+/// falls back to a file in Application Support protected until first unlock, so a pairing is
+/// never silently lost.
 enum PairingStore {
     private static let service = "app.simbridge.pairing"
     private static let account = "primary"
+
+    private static var fileURL: URL? {
+        guard let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("pairing.json")
+    }
 
     static func load() -> Pairing? {
         let q: [String: Any] = [
@@ -52,7 +61,11 @@ enum PairingStore {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var out: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return nil }
+        if SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data,
+           let p = try? JSONDecoder().decode(Pairing.self, from: data) {
+            return p
+        }
+        guard let url = fileURL, let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(Pairing.self, from: data)
     }
 
@@ -67,7 +80,20 @@ enum PairingStore {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             kSecValueData as String: data,
         ]
-        return SecItemAdd(q as CFDictionary, nil) == errSecSuccess
+        let status = SecItemAdd(q as CFDictionary, nil)
+        if status == errSecSuccess { return true }
+        dlog("keychain save failed (\(status)); using protected file")
+        guard let url = fileURL else { return false }
+        do {
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var u = url
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try? u.setResourceValues(values)
+            return true
+        } catch {
+            return false
+        }
     }
 
     static func delete() {
@@ -77,5 +103,6 @@ enum PairingStore {
             kSecAttrAccount as String: account,
         ]
         SecItemDelete(q as CFDictionary)
+        if let url = fileURL { try? FileManager.default.removeItem(at: url) }
     }
 }

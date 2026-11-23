@@ -75,6 +75,8 @@ has pair_request && pass "pairing request with verification code" || fail "pairi
 has paired && pass "pairing completed (iOS accepted credentials)" || fail "pairing completed"
 has ready && pass "iOS reconnected with device key (CryptoKit <-> AES-GCM interop)" || fail "device auth"
 for r in sync threads messages contacts calls; do has request "$r" && pass "iOS requested $r" || fail "iOS requested $r"; done
+READY=$(python3 -c "import json; print(sum(1 for e in json.load(open('$SLOG')) if e['kind']=='ready'))")
+[ "$READY" -ge 5 ] && pass "pairing survives app restarts ($READY reconnects)" || fail "pairing lost after restart (only $READY reconnects)"
 has bad_auth && fail "server saw a bad auth frame" || pass "no bad auth frames"
 has error && fail "server errors (see fake_android_log.json)" || pass "no protocol errors"
 if [ -n "$(crashed)" ]; then fail "app crashed: $(crashed)"; else pass "no crash reports"; fi

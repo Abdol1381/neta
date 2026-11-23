@@ -39,10 +39,15 @@ struct ThreadsView: View {
                 }
             }
             .sheet(isPresented: $showCompose) { ComposeView().environmentObject(model) }
-            .onChange(of: model.threads.count) { n in
-                if TestHooks.openFirstThread, path.isEmpty, n > 0 { path = [model.threads[0]] }
-            }
+            .onChange(of: model.threads.count) { _ in openFirstForTest() }
+            .onAppear { openFirstForTest() }
         }
+    }
+}
+
+private extension ThreadsView {
+    func openFirstForTest() {
+        if TestHooks.openFirstThread, path.isEmpty, let first = model.threads.first { path = [first] }
     }
 }
 
