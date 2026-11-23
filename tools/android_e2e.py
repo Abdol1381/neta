@@ -150,6 +150,38 @@ def call_state(state):
     return lambda e: e.get("t") == "call" and e.get("call", {}).get("state") == state
 
 
+def check_audio_pipeline():
+    jar = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "android", "app", "src", "main", "assets", "scrcpy-server.jar")
+    adb("push", jar, "/data/local/tmp/simbridge-scrcpy.jar")
+    apk_path = shell(f"pm path {PKG}").strip().splitlines()[0].replace("package:", "")
+    sid = "1a2b3c4d"
+    # Same script as CallAudioRelay.shellScript()
+    script = (
+        f"CLASSPATH=/data/local/tmp/simbridge-scrcpy.jar app_process / com.genymobile.scrcpy.Server 3.3.4 scid={sid} "
+        "log_level=warn video=false audio=true control=false audio_source=voice-call-downlink "
+        "audio_codec=raw tunnel_forward=true raw_stream=true cleanup=false "
+        "</dev/null >/dev/null 2>/data/local/tmp/simbridge-audio.log &" + chr(10) +
+        "SRV=$!" + chr(10) +
+        "trap 'kill $SRV 2>/dev/null' EXIT INT TERM HUP" + chr(10) +
+        f"CLASSPATH={apk_path} app_process / app.simbridge.android.shell.SocketCat scrcpy_{sid}" + chr(10)
+    )
+    with open(os.path.join(OUT, "audio_script.sh"), "w") as f:
+        f.write(script)
+    adb("push", os.path.join(OUT, "audio_script.sh"), "/data/local/tmp/simbridge-audio.sh")
+    try:
+        p = subprocess.run(["adb", "exec-out", "sh /data/local/tmp/simbridge-audio.sh"], capture_output=True, timeout=10)
+        got = len(p.stdout)
+    except subprocess.TimeoutExpired as e:
+        got = len(e.stdout or b"")
+    shell(f"pkill -f 'scid={sid}'; pkill -f SocketCat; true")
+    log = shell("cat /data/local/tmp/simbridge-audio.log")
+    with open(os.path.join(OUT, "audio_pipeline.txt"), "w") as f:
+        f.write(f"bytes={got}" + chr(10) + log)
+    bad = any(k in log for k in ("does not match", "Unknown", "Invalid", "ClassNotFound"))
+    check("audio pipeline: scrcpy server accepts our arguments/version", not bad, log[-400:])
+    check("audio pipeline: call audio bytes flow to the app side", got > 0, f"{got} bytes; {log[-200:]}", required=False)
+
+
 def setup_device(apk):
     out = adb("install", "-r", "-g", apk, timeout=240)
     check("install debug APK", "Success" in out.stdout, out.stdout + out.stderr)
@@ -341,6 +373,11 @@ def run_calls(c):
     check("call in: answer accepted", r.get("ok"), r)
     e = c.wait_event(call_state("offhook"), 15)
     check("call in: now in conversation (offhook)", e is not None, e)
+    # Developer-mode call audio: the app refuses cleanly without Shizuku...
+    r = c.request("listen", on=True)
+    check("listen: refused cleanly without Shizuku", not r.get("ok") and str(r.get("err", "")).startswith("dev_"), r)
+    # ...and the exact shell pipeline it would run (scrcpy server + SocketCat) works with ADB privileges.
+    check_audio_pipeline()
     r = c.request("speaker", on=True)
     check("call: speaker request ok", r.get("ok"), r)
     check("call: speaker actually on", r.get("data", {}).get("on") is True, r, required=False)

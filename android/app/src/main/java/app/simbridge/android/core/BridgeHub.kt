@@ -22,6 +22,12 @@ object BridgeHub {
     lateinit var appContext: Context
         private set
     val trust: TrustStore by lazy { TrustStore(appContext) }
+    /** Developer-mode call audio (Shizuku). */
+    val audio: app.simbridge.android.telephony.CallAudioRelay by lazy {
+        app.simbridge.android.telephony.CallAudioRelay(appContext).also { it.init() }
+    }
+    /** Called by the call controller when a call ends. */
+    @Volatile var onCallEnded: (() -> Unit)? = null
 
     val serviceRunning = MutableStateFlow(false)
     val serverError = MutableStateFlow<String?>(null)

@@ -142,6 +142,7 @@ class TelephonyMonitor(private val context: Context, private val onChange: (Devi
             model = Build.MODEL,
             android = Build.VERSION.RELEASE,
             perms = Perms.summary(context),
+            devAudio = app.simbridge.android.core.BridgeHub.audio.state.value,
         )
     }
 

@@ -51,14 +51,28 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Label("دیدن و پاسخ/رد تماس، شماره‌گیری، بلندگو و قطع صدا از آیفون", systemImage: "checkmark.circle.fill")
+                    HStack {
+                        Label("وضعیت در اندروید", systemImage: "ear")
+                        Spacer()
+                        Text(devAudioText).foregroundStyle(model.canListen ? Theme.good : Theme.fair)
+                    }
+                    Toggle("پخش خودکار هنگام مکالمه", isOn: $model.autoListen)
+                        .disabled(!model.canListen)
+                } header: {
+                    Text("شنیدن تماس روی آیفون")
+                } footer: {
+                    Text("با حالت توسعه‌دهنده (اپ Shizuku، بدون روت) روی گوشی اندروید، صدای طرف مقابل روی آیفون یا AirPods پخش می‌شود، حتی با صفحه قفل. برای صحبت، با گوشی اندروید یا هدست بلوتوثِ وصل به آن صحبت کنید؛ اندروید اجازه نمی‌دهد صدای آیفون وارد تماس شود.")
+                }
+
+                Section {
+                    Label("دیدن، پاسخ، رد و قطع تماس، شماره‌گیری با انتخاب سیم، بلندگو، بی‌صدا و کدهای USSD از آیفون", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.primary)
-                    Label("خودِ صدای مکالمه روی گوشی اندروید (یا هدست بلوتوثِ وصل به آن) است", systemImage: "info.circle.fill")
+                    Label("صحبت کردن با گوشی اندروید (یا هدست بلوتوثِ وصل به آن) انجام می‌شود", systemImage: "info.circle.fill")
                         .foregroundStyle(.primary)
                 } header: {
                     Text("درباره تماس صوتی")
                 } footer: {
-                    Text("اندروید به هیچ برنامه عادی اجازه دریافت یا ارسال صدای تماس سیم‌کارت را نمی‌دهد. برای شنیدن صدا روی آیفون باید از «انتقال تماس» اپراتور به یک سرویس VoIP یا درگاه سخت‌افزاری GSM/SIP استفاده شود.")
+                    Text("برای صدای کامل دوطرفه روی آیفون، درگاه سخت‌افزاری GSM لازم است.")
                 }
 
                 Section {
@@ -77,6 +91,16 @@ struct SettingsView: View {
             } message: {
                 Text("برای اتصال دوباره باید QR جدید اسکن کنید. در گوشی اندروید هم می‌توانید این آیفون را از فهرست حذف کنید.")
             }
+        }
+    }
+
+    private var devAudioText: String {
+        switch model.status?.devAudio {
+        case "ready": return "فعال"
+        case "no_permission": return "اجازه Shizuku لازم است"
+        case "no_shizuku": return "Shizuku فعال نیست"
+        case "unsupported": return "پشتیبانی نمی‌شود"
+        default: return model.conn.isReady ? "نامشخص" : "—"
         }
     }
 

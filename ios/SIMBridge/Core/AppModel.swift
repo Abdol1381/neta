@@ -34,6 +34,13 @@ final class AppModel: ObservableObject {
     @Published var toast: String?
     @Published var tab: AppTab = .home
     @Published var callScreenMinimized = false
+    /// Call downlink audio is playing on the iPhone (developer mode on Android).
+    @Published private(set) var listening = false
+    @Published var autoListen: Bool = UserDefaults.standard.object(forKey: "autoListen") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoListen, forKey: "autoListen") }
+    }
+    let audioPlayer = CallAudioPlayer()
+    var canListen: Bool { status?.devAudio == "ready" }
     @Published var openThreadId: Int64?
 
     let client = BridgeClient()
@@ -274,7 +281,8 @@ final class AppModel: ObservableObject {
     private func endBackgroundTask() {
         bgDeadline?.cancel()
         bgDeadline = nil
-        if !isForeground {
+        // While call audio is playing the app stays alive (audio background mode) and keeps the link.
+        if !isForeground && !listening {
             client.autoReconnect = false
             client.disconnect()
         }
@@ -332,6 +340,10 @@ final class AppModel: ObservableObject {
             if isForeground { loadRecents() }
         case "sms":
             if let m = JSONBridge.decode(SmsMessage.self, body["msg"]) { incoming(m, live: true) }
+        case "audio":
+            if listening, let s = body["d"] as? String, let d = Data(base64Encoded: s) { audioPlayer.enqueue(d) }
+        case "listen":
+            if body["on"] as? Bool == false { stopListeningLocally() }
         case "sms_status":
             guard let ref = body["ref"] as? String, let state = body["state"] as? String else { return }
             updateOutgoing(ref: ref, state: state)
@@ -350,7 +362,14 @@ final class AppModel: ObservableObject {
         }
         if c.state != "ringing" { Notifier.removeIncomingCall() }
         if c.state == "offhook" && prev.state == "idle" { callScreenMinimized = false }
+        if c.state == "offhook" && prev.state != "offhook" && autoListen && canListen && !listening {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self, self.call.state == "offhook", !self.listening else { return }
+                self.setListening(true)
+            }
+        }
         if c.isIdle && !prev.isIdle {
+            stopListeningLocally()
             speakerOn = false
             muted = false
             if isForeground { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.loadRecents() } }
@@ -555,6 +574,34 @@ final class AppModel: ObservableObject {
         client.request("dial", params) { [weak self] r in
             if case .failure(let e) = r { self?.report(e) }
         }
+    }
+
+    // MARK: - Listen on iPhone
+
+    func setListening(_ on: Bool) {
+        if on {
+            audioPlayer.start()
+            listening = true
+        }
+        client.request("listen", ["on": on], timeout: 25) { [weak self] r in
+            guard let self else { return }
+            switch r {
+            case .success(let d):
+                if d["on"] as? Bool != true { self.stopListeningLocally() }
+            case .failure(let e):
+                self.stopListeningLocally()
+                if on { self.report(e) }
+            }
+        }
+        if !on { stopListeningLocally() }
+    }
+
+    private func stopListeningLocally() {
+        guard listening else { return }
+        listening = false
+        audioPlayer.stop()
+        // Back in the background without audio: release the connection shortly, as usual.
+        if !isForeground { beginBackgroundTask(seconds: 3) }
     }
 
     func answer(speaker: Bool = false, _ done: ((Bool) -> Void)? = nil) {

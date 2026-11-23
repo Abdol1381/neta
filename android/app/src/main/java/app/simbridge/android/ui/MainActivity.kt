@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.BluetoothDisabled
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Contacts
+import androidx.compose.material.icons.outlined.Hearing
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.LinkOff
@@ -147,6 +148,7 @@ fun HomeScreen() {
     val ble by BridgeHub.bleActive.collectAsStateWithLifecycle()
     val call by BridgeHub.call.collectAsStateWithLifecycle()
     val serverError by BridgeHub.serverError.collectAsStateWithLifecycle()
+    val devAudio by BridgeHub.audio.state.collectAsStateWithLifecycle()
     var permTick by remember { mutableIntStateOf(0) }
     val resumeTick = rememberResumeTick()
     var showPair by remember { mutableStateOf(false) }
@@ -164,6 +166,7 @@ fun HomeScreen() {
     }
 
     LaunchedEffect(resumeTick) {
+        BridgeHub.audio.refresh()
         BridgeHub.refreshDevices()
         BridgeHub.refreshTelephony?.invoke()
     }
@@ -346,9 +349,57 @@ fun HomeScreen() {
             }
         }
 
+        item { SectionLabel("شنیدن تماس روی آیفون") }
+        item {
+            Card(padding = 12.dp) {
+                when (devAudio) {
+                    "ready" -> InfoRow(
+                        icon = Icons.Outlined.Hearing,
+                        title = "فعال",
+                        subtitle = "صدای طرف مقابل روی آیفون پخش می‌شود. برای صحبت، با همین گوشی یا هدست بلوتوثِ وصل به آن صحبت کنید.",
+                        tint = Brand.Good,
+                    )
+                    "no_permission" -> InfoRow(
+                        icon = Icons.Outlined.Hearing,
+                        title = "اجازه Shizuku لازم است",
+                        subtitle = "Shizuku فعال است؛ به SIMBridge اجازه بدهید.",
+                        tint = Brand.Fair,
+                    ) {
+                        FilledTonalButton(
+                            onClick = { BridgeHub.audio.requestPermission() },
+                            contentPadding = PaddingValues(horizontal = 14.dp),
+                            modifier = Modifier.height(34.dp),
+                        ) { Text("اجازه", style = MaterialTheme.typography.labelLarge) }
+                    }
+                    "unsupported" -> InfoRow(
+                        icon = Icons.Outlined.Hearing,
+                        title = "پشتیبانی نمی‌شود",
+                        subtitle = "این قابلیت به اندروید ۱۱ یا جدیدتر نیاز دارد.",
+                        tint = Brand.Muted,
+                    )
+                    else -> InfoRow(
+                        icon = Icons.Outlined.Hearing,
+                        title = "اختیاری · حالت توسعه‌دهنده",
+                        subtitle = "با نصب اپ Shizuku و روشن کردن آن از «اشکال‌زدایی بی‌سیم»، صدای طرف مقابل تماس روی آیفون پخش می‌شود (بدون روت).",
+                        tint = Brand.Muted,
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                try {
+                                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/guide/setup/")))
+                                } catch (_: Exception) {}
+                            },
+                            contentPadding = PaddingValues(horizontal = 14.dp),
+                            modifier = Modifier.height(34.dp),
+                        ) { Text("راهنما", style = MaterialTheme.typography.labelLarge) }
+                    }
+                }
+            }
+        }
+
         item {
             Text(
-                "صدای مکالمه روی همین گوشی (یا هدست بلوتوثِ وصل به آن) است؛ اندروید اجازه انتقال صدای تماس سیم‌کارت را به برنامه‌ها نمی‌دهد. پاسخ، رد، شماره‌گیری، بلندگو و بی‌صدا از آیفون کار می‌کند.",
+                "پاسخ، رد، شماره‌گیری، بلندگو و بی‌صدا از آیفون کار می‌کند. صحبت کردن با همین گوشی (یا هدست بلوتوثِ وصل به آن) است؛ اندروید اجازه ارسال صدای آیفون به داخل تماس را نمی‌دهد.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

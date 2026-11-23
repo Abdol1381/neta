@@ -66,7 +66,8 @@ struct CallScreen: View {
 
                 Spacer()
 
-                Label("صدای مکالمه روی گوشی اندروید است", systemImage: "iphone.radiowaves.left.and.right")
+                Label(audioHint, systemImage: model.listening ? "ear" : "iphone.radiowaves.left.and.right")
+                    .multilineTextAlignment(.center)
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.white.opacity(0.85))
                     .padding(.horizontal, 14).padding(.vertical, 8)
@@ -78,6 +79,11 @@ struct CallScreen: View {
         }
         .onReceive(timer) { now = $0 }
         .preferredColorScheme(.dark)
+    }
+
+    private var audioHint: String {
+        if model.listening { return "صدای طرف مقابل روی آیفون · برای صحبت، با گوشی اندروید یا هدست آن صحبت کنید" }
+        return "صدای مکالمه روی گوشی اندروید است"
     }
 
     private var stateText: String {
@@ -119,7 +125,10 @@ struct CallScreen: View {
 
     private var activeControls: some View {
         VStack(spacing: 26) {
-            HStack(spacing: 40) {
+            HStack(spacing: 32) {
+                if model.canListen {
+                    toggle("شنیدن", model.listening ? "ear.fill" : "ear", model.listening) { model.setListening(!model.listening) }
+                }
                 toggle("بلندگو", model.speakerOn ? "speaker.wave.3.fill" : "speaker.fill", model.speakerOn) { model.toggleSpeaker() }
                 toggle("بی‌صدا", model.muted ? "mic.slash.fill" : "mic.fill", model.muted) { model.toggleMute() }
             }

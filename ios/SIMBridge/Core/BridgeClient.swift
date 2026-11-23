@@ -32,6 +32,10 @@ enum BridgeError: LocalizedError {
             case "bad_request": return "اطلاعات واردشده معتبر نیست"
             case "ussd_failed": return "اپراتور به این کد پاسخ نداد یا کد نامعتبر است"
             case "timeout": return "پاسخی از اپراتور نرسید"
+            case "dev_no_shizuku": return "برای شنیدن تماس روی آیفون، Shizuku را روی گوشی اندروید فعال کنید"
+            case "dev_no_permission": return "در اپ اندروید به SIMBridge اجازه Shizuku بدهید"
+            case "dev_unsupported": return "گوشی اندروید از شنیدن تماس پشتیبانی نمی‌کند (اندروید ۱۱+ لازم است)"
+            case "audio_failed": return "دریافت صدای تماس روی گوشی اندروید شروع نشد"
             default: return "خطا در گوشی اندروید (\(code))"
             }
         }

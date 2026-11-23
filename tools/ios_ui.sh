@@ -59,6 +59,9 @@ run_round() {  # $1 = suffix
   touch "$FLAG"
   launch -SIMBridgeTab home;      shot "17_incoming_call$s" 6
   rm -f "$FLAG"
+  touch "${FLAG}_active"
+  launch -SIMBridgeTab home;      shot "18_active_call_listening$s" 7
+  rm -f "${FLAG}_active"
 }
 
 xcrun simctl ui "$UDID" appearance light
@@ -77,6 +80,8 @@ has ready && pass "iOS reconnected with device key (CryptoKit <-> AES-GCM intero
 for r in sync threads messages contacts calls; do has request "$r" && pass "iOS requested $r" || fail "iOS requested $r"; done
 READY=$(python3 -c "import json; print(sum(1 for e in json.load(open('$SLOG')) if e['kind']=='ready'))")
 [ "$READY" -ge 5 ] && pass "pairing survives app restarts ($READY reconnects)" || fail "pairing lost after restart (only $READY reconnects)"
+has request listen && pass "iOS auto-started listening during an active call" || fail "iOS did not request call audio"
+has audio_sent && pass "call audio streamed to the iPhone" || fail "call audio not streamed"
 has bad_auth && fail "server saw a bad auth frame" || pass "no bad auth frames"
 has error && fail "server errors (see fake_android_log.json)" || pass "no protocol errors"
 if [ -n "$(crashed)" ]; then fail "app crashed: $(crashed)"; else pass "no crash reports"; fi

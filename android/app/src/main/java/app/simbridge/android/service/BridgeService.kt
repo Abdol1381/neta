@@ -70,6 +70,8 @@ class BridgeService : Service() {
             BridgeHub.broadcast(JSONObject().put("t", "sms").put("msg", msg))
             BridgeHub.wakeClients()
         }
+        BridgeHub.audio.onStateChanged = { main.post { monitor.rebuild() } }
+        BridgeHub.onCallEnded = { BridgeHub.audio.stop("call_ended") }
         BridgeHub.refreshTelephony = {
             main.post {
                 contacts.clearCache()
@@ -203,6 +205,27 @@ class BridgeService : Service() {
             }
             "mute" -> JSONObject().put("on", onMain { calls.setMute(req.optBoolean("on")) })
             "calls" -> JSONObject().put("calls", calls.callLog(req.optInt("limit", 100).coerceIn(1, 500)))
+            "listen" -> {
+                if (!req.optBoolean("on")) {
+                    BridgeHub.audio.stop()
+                    JSONObject().put("on", false)
+                } else {
+                    BridgeHub.audio.refresh()
+                    val st = BridgeHub.audio.state.value
+                    if (st != "ready") throw BridgeError("dev_$st")
+                    if (BridgeHub.call.value.state != "offhook") throw BridgeError("no_call")
+                    try {
+                        BridgeHub.audio.start(
+                            onPcm = { pcm -> BridgeHub.broadcast(JSONObject().put("t", "audio").put("d", android.util.Base64.encodeToString(pcm, android.util.Base64.NO_WRAP))) },
+                            onEnd = { reason -> BridgeHub.broadcast(JSONObject().put("t", "listen").put("on", false).put("reason", reason ?: "stopped")) },
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "listen start", e)
+                        throw BridgeError("audio_failed")
+                    }
+                    JSONObject().put("on", true)
+                }
+            }
             "ussd" -> JSONObject().put("text", calls.ussd(req.optString("code"), req.optInt("subId", -1).takeIf { it >= 0 }))
             "contacts" -> JSONObject().put("contacts", contacts.all())
             else -> throw BridgeError("unknown_request")
@@ -223,6 +246,9 @@ class BridgeService : Service() {
         BridgeHub.serviceRunning.value = false
         BridgeHub.incomingSms = null
         BridgeHub.refreshTelephony = null
+        BridgeHub.onCallEnded = null
+        BridgeHub.audio.onStateChanged = null
+        BridgeHub.audio.stop()
         BridgeHub.server = null
         BridgeHub.ble = null
         BridgeHub.stopPairing()

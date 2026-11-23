@@ -52,6 +52,7 @@ def status():
         "airplane": False,
         "device": {"model": "Mi A3", "android": "11"},
         "perms": {"sms": True, "phone": True, "callLog": True, "contacts": True},
+        "devAudio": "ready",
     }
 
 
@@ -155,10 +156,12 @@ async def handler(ws):
             CALL.update(state="ringing", number="09121234567", name="مریم احمدی", direction="in", since=now_ms(), subId=2)
             await send({"t": "call", "call": dict(CALL)})
 
-        if os.path.exists(ARGS.call_flag):
+        if os.path.exists(ARGS.call_flag + "_active"):
+            CALL.update(state="offhook", number="09121234567", name="مریم احمدی", direction="in", since=now_ms() - 65_000, subId=1)
+        elif os.path.exists(ARGS.call_flag):
             asyncio.create_task(ring_later())
         else:
-            CALL.update(state="idle", number="", name="", direction="", since=0)
+            CALL.update(state="idle", number="", name="", direction="", since=0, subId=-1)
 
         async for frame in ws:
             req = P.open_frame(key, frame, P.C2S)
@@ -203,6 +206,17 @@ async def handler(ws):
             elif t in ("reject", "hangup"):
                 CALL.update(state="idle", number="", name="", direction="", since=0)
                 asyncio.create_task(send({"t": "call", "call": dict(CALL)}))
+            elif t == "listen":
+                if req.get("on"):
+                    async def stream():
+                        import math, struct
+                        for k in range(150):  # 3 s of a 440 Hz tone, 20 ms chunks of 16 kHz mono s16le
+                            pcm = b"".join(struct.pack("<h", int(6000 * math.sin(2 * math.pi * 440 * (k * 320 + i) / 16000))) for i in range(320))
+                            await send({"t": "audio", "d": P.b64(pcm)})
+                            await asyncio.sleep(0.02)
+                        log("audio_sent", 150)
+                    asyncio.create_task(stream())
+                data = {"on": bool(req.get("on"))}
             elif t == "ussd":
                 await asyncio.sleep(1)
                 data = {"text": "مانده حساب شما: ۱۲۵,۴۰۰ ریال" + chr(10) + "اعتبار تا ۱۴۰۵/۰۹/۳۰"}

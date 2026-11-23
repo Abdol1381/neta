@@ -47,6 +47,8 @@ struct PhoneStatus: Codable, Equatable {
     var airplane: Bool
     var device: DeviceInfo
     var perms: [String: Bool]
+    /// Developer-mode call audio on Android: ready / no_permission / no_shizuku / unsupported
+    var devAudio: String?
 }
 
 struct CallInfo: Codable, Equatable {

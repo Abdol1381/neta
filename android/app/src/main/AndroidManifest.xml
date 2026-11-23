@@ -85,5 +85,14 @@
         <receiver
             android:name=".receivers.PairingActionReceiver"
             android:exported="false" />
+
+        <!-- Shizuku delivers its binder through this provider (developer-mode call audio). -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 </manifest>
