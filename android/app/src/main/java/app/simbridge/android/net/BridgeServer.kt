@@ -1,6 +1,7 @@
 package app.simbridge.android.net
 
 import android.util.Log
+import app.simbridge.android.BuildConfig
 import app.simbridge.android.core.BridgeHub
 import app.simbridge.android.core.ClientInfo
 import app.simbridge.android.core.Crypto
@@ -147,6 +148,7 @@ class BridgeServer(port: Int, private val handler: RequestHandler) :
             val code = Crypto.verificationCode(s.key!!, s.nonce)
             val req = PairRequest(s.connId, s.name, s.model, code)
             BridgeHub.pendingApproval.value = req
+            if (BuildConfig.DEBUG) Log.i("SIMBridgeTest", "APPROVAL $code")
             PairingNotifier.show(BridgeHub.appContext, req)
         } else {
             s.phase = Phase.READY

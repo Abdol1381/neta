@@ -47,6 +47,13 @@ final class AppModel: ObservableObject {
     /// ref -> local message id, for optimistic outgoing SMS.
     private var outgoing: [String: (threadId: Int64?, localId: String, address: String)] = [:]
     private var contactsLoaded = false
+    /// threadId -> date (ms) up to which the user has read that conversation on the iPhone.
+    private var readMarks: [String: Int64] = {
+        (UserDefaults.standard.dictionary(forKey: "sms.readMarks") as? [String: NSNumber])?
+            .mapValues { $0.int64Value } ?? [:]
+    }() {
+        didSet { UserDefaults.standard.set(readMarks.mapValues { NSNumber(value: $0) }, forKey: "sms.readMarks") }
+    }
 
     private init() {
         pairing = PairingStore.load()
@@ -63,18 +70,31 @@ final class AppModel: ObservableObject {
 
     func launch() {
         Notifier.setup()
+        // iOS may relaunch the app in the background (Bluetooth state restoration). In that case stay
+        // quiet: the BLE wake handler opens the connection only for as long as it is needed.
+        isForeground = UIApplication.shared.applicationState != .background
+        client.autoReconnect = isForeground
+        #if DEBUG
+        if TestHooks.reset { PairingStore.delete(); pairing = nil; Notifier.lastSmsDate = 0; Notifier.lastMissedDate = 0 }
+        if let tab = TestHooks.initialTab { self.tab = tab }
+        #endif
         if let p = pairing {
-            client.connect(.device(p))
-            ble.start(serverId: p.serverId)
+            if isForeground { client.connect(.device(p)) }
+            if !TestHooks.isActive { ble.start(serverId: p.serverId) }
         }
+        #if DEBUG
+        if pairing == nil, let payload = TestHooks.pairPayload {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in _ = self?.startPairing(with: payload) }
+        }
+        #endif
     }
 
     func enterForeground() {
         isForeground = true
         client.autoReconnect = true
         endBackgroundTask()
-        if pairing != nil {
-            client.kick()
+        if let p = pairing {
+            if client.mode == nil { client.connect(.device(p)) } else { client.kick() }
             startPing()
             if conn.isReady { refreshAll() }
         }
@@ -110,13 +130,17 @@ final class AppModel: ObservableObject {
         pairing = p
         pairingStage = .success
         Notifier.lastSmsDate = 0
+        Notifier.lastMissedDate = 0
+        readMarks = [:]
         client.reset()
         client.autoReconnect = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
             guard let self, let p = self.pairing else { return }
             self.client.connect(.device(p))
-            self.ble.start(serverId: p.serverId)
-            Notifier.requestAuthorization()
+            if !TestHooks.isActive {
+                self.ble.start(serverId: p.serverId)
+                Notifier.requestAuthorization()
+            }
         }
     }
 
@@ -126,7 +150,7 @@ final class AppModel: ObservableObject {
             pairingStage = .failed("درخواست اتصال روی گوشی اندروید رد شد.")
             client.reset()
         case "pairing_closed":
-            pairingStage = .failed("این کد QR منقضی شده است. در اپ اندروید «اتصال آیفون جدید» را دوباره بزنید.")
+            pairingStage = .failed("این کد QR منقضی شده است. در اپ اندروید «اتصال آیفون» را دوباره بزنید و کد جدید را اسکن کنید.")
             client.reset()
         case "unknown_device":
             if pairing != nil {
@@ -153,7 +177,9 @@ final class AppModel: ObservableObject {
         recents = []
         contactsLoaded = false
         pairingStage = .idle
+        readMarks = [:]
         Notifier.lastSmsDate = 0
+        Notifier.lastMissedDate = 0
     }
 
     // MARK: - Connection
@@ -161,8 +187,11 @@ final class AppModel: ObservableObject {
     private func connStateChanged(_ s: ConnState) {
         conn = s
         if case .awaitingApproval(let code) = s, pairing == nil { pairingStage = .confirm(code: code) }
-        if case .failed(let reason) = s, pairing == nil, pairingStage == .connecting {
-            pairingStage = .failed(reason)
+        if case .failed(let reason) = s, pairing == nil {
+            switch pairingStage {
+            case .connecting, .confirm: pairingStage = .failed(reason)
+            default: break
+            }
         }
         if !s.isReady { latencyMs = nil }
     }
@@ -348,7 +377,7 @@ final class AppModel: ObservableObject {
             t.snippet = m.body
             t.date = max(t.date, m.date)
             t.out = false
-            if !isOpen { t.unread += 1 }
+            if isOpen { markRead(tid, upTo: m.date) } else { t.unread += 1 }
             threads.remove(at: idx)
             threads.insert(t, at: 0)
         }
@@ -373,7 +402,7 @@ final class AppModel: ObservableObject {
     func loadThreads(_ done: (() -> Void)? = nil) {
         guard conn.isReady else { done?(); return }
         loadingThreads = true
-        client.request("threads", ["limit": 100]) { [weak self] r in
+        client.request("threads", ["limit": 100, "readMarks": readMarks]) { [weak self] r in
             guard let self else { return }
             self.loadingThreads = false
             if case .success(let d) = r, let list = JSONBridge.decode([SmsThread].self, d["threads"]) {
@@ -394,6 +423,9 @@ final class AppModel: ObservableObject {
                     m.id.hasPrefix("local-") && !list.contains { $0.out && $0.body == m.body && abs($0.date - m.date) < 300_000 }
                 }
                 self.messages[threadId] = list + pendingLocal
+                if self.openThreadId == threadId, let last = list.last(where: { !$0.out }) {
+                    self.markRead(threadId, upTo: last.date)
+                }
             }
             done?()
         }
@@ -420,9 +452,15 @@ final class AppModel: ObservableObject {
 
     func markThreadOpened(_ threadId: Int64?) {
         openThreadId = threadId
-        if let tid = threadId, let i = threads.firstIndex(where: { $0.threadId == tid }) {
-            threads[i].unread = 0
-        }
+        guard let tid = threadId else { return }
+        markRead(tid, upTo: threads.first { $0.threadId == tid }?.date ?? 0)
+    }
+
+    private func markRead(_ tid: Int64, upTo date: Int64) {
+        // Dates come from the Android phone's clock, so never mix in the iPhone's clock here.
+        let latest = max(date, messages[tid]?.last(where: { !$0.out })?.date ?? 0)
+        readMarks[String(tid)] = max(readMarks[String(tid)] ?? 0, latest)
+        if let i = threads.firstIndex(where: { $0.threadId == tid }) { threads[i].unread = 0 }
     }
 
     // MARK: - Actions

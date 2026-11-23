@@ -4,6 +4,7 @@ struct CallScreen: View {
     @EnvironmentObject var model: AppModel
     @State private var now = Date()
     @State private var busy = false
+    @State private var pulse = false
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var call: CallInfo { model.call }
@@ -11,7 +12,7 @@ struct CallScreen: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.07, green: 0.09, blue: 0.2), Theme.indigo.opacity(0.85)],
+            LinearGradient(colors: [Color(red: 0.06, green: 0.07, blue: 0.12), Color(red: 0.11, green: 0.13, blue: 0.26)],
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
 
@@ -36,9 +37,19 @@ struct CallScreen: View {
 
                 Spacer()
 
-                Avatar(name: call.name.isEmpty ? call.number : call.name, size: 110)
-                    .overlay(Circle().stroke(.white.opacity(0.25), lineWidth: ringing ? 10 : 0).scaleEffect(ringing ? 1.25 : 1))
-                    .animation(ringing ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default, value: ringing)
+                ZStack {
+                    if ringing {
+                        Circle()
+                            .stroke(.white.opacity(0.18), lineWidth: 2)
+                            .frame(width: 110, height: 110)
+                            .scaleEffect(pulse ? 1.6 : 1)
+                            .opacity(pulse ? 0 : 1)
+                            .animation(.easeOut(duration: 1.4).repeatForever(autoreverses: false), value: pulse)
+                    }
+                    Avatar(name: call.name.isEmpty ? call.number : call.name, size: 110)
+                        .background(Circle().fill(.white.opacity(0.06)))
+                }
+                .onAppear { pulse = true }
 
                 VStack(spacing: 6) {
                     Text(call.name.isEmpty ? Phone.ltr(call.number.isEmpty ? "شماره نامشخص" : call.number) : call.name)

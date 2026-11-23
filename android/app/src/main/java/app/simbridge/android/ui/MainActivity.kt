@@ -11,14 +11,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,24 +28,28 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BatteryChargingFull
-import androidx.compose.material.icons.outlined.BatteryStd
+import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.Bluetooth
 import androidx.compose.material.icons.outlined.BluetoothDisabled
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Contacts
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.LinkOff
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PhoneIphone
+import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.QrCode2
-import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,7 +57,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -70,8 +74,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -121,6 +125,15 @@ private fun rememberResumeTick(): Int {
     return tick
 }
 
+private fun permIcon(key: String): ImageVector = when (key) {
+    "sms" -> Icons.Outlined.Sms
+    "phone" -> Icons.Outlined.Call
+    "callLog" -> Icons.Outlined.History
+    "contacts" -> Icons.Outlined.Contacts
+    "notifications" -> Icons.Outlined.Notifications
+    else -> Icons.Outlined.Bluetooth
+}
+
 @SuppressLint("BatteryLife")
 @Composable
 fun HomeScreen() {
@@ -143,224 +156,210 @@ fun HomeScreen() {
     val batteryExempt = remember(resumeTick) {
         ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName)
     }
-    val addresses = remember(resumeTick, running, clients.size) { NetUtil.localAddresses() }
+    val addresses = remember(resumeTick, running, clients.size, status) { NetUtil.localAddresses() }
 
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         permTick++
         BridgeHub.refreshTelephony?.invoke()
     }
 
-    LaunchedEffect(resumeTick) { BridgeHub.refreshDevices() }
+    LaunchedEffect(resumeTick) {
+        BridgeHub.refreshDevices()
+        BridgeHub.refreshTelephony?.invoke()
+    }
     // First launch: start the bridge automatically once the essentials are granted.
-    LaunchedEffect(missing.none { it.required }) {
-        if (missing.none { it.required } && !running && !BridgeService.isEnabled(ctx) &&
-            !ctx.getSharedPreferences("settings", 0).getBoolean("started_once", false)
-        ) {
-            ctx.getSharedPreferences("settings", 0).edit().putBoolean("started_once", true).apply()
+    val essentialsGranted = missing.none { it.required }
+    LaunchedEffect(essentialsGranted) {
+        val prefs = ctx.getSharedPreferences("settings", 0)
+        if (essentialsGranted && !running && !prefs.getBoolean("started_once", false)) {
+            prefs.edit().putBoolean("started_once", true).apply()
             BridgeService.start(ctx)
         }
     }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
-            HeaderCard(
-                running = running,
-                connected = clients.map { it.name },
-                callState = call.state,
-                error = serverError,
-                onToggle = { on -> if (on) BridgeService.start(ctx) else BridgeService.stop(ctx) },
-            )
-        }
-
-        if (missing.isNotEmpty()) {
-            item {
-                Card {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Shield, null, tint = MaterialTheme.colorScheme.primary)
-                        HSpacer(8.dp)
-                        Text("دسترسی‌های لازم", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    }
-                    Spacer8()
-                    Text(
-                        "این دسترسی‌ها فقط برای پل بین این گوشی و آیفون خودتان استفاده می‌شوند؛ هیچ داده‌ای به سرور یا شخص ثالث ارسال نمی‌شود.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    missing.forEach { g ->
-                        Spacer8()
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(g.title + if (g.required) "" else " (اختیاری)", fontWeight = FontWeight.SemiBold)
-                                Text(g.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            FilledTonalButton(onClick = { permLauncher.launch(g.permissions.toTypedArray()) }) { Text("اجازه") }
-                        }
-                    }
-                    Spacer8()
-                    Button(
-                        onClick = { permLauncher.launch(missing.flatMap { it.permissions }.toTypedArray()) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("اجازه همه") }
-                    TextButton(onClick = {
-                        ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName)))
-                    }) { Text("اگر دکمه کار نکرد: باز کردن تنظیمات برنامه") }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("SIMBridge", style = MaterialTheme.typography.headlineSmall)
+                    Text("پل سیم‌کارت به آیفون", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
-        }
-
-        if (!batteryExempt) {
-            item {
-                Card {
-                    Text("پایداری در حالت قفل", fontWeight = FontWeight.Bold)
-                    Text(
-                        "برای اینکه اتصال هنگام خاموش بودن صفحه قطع نشود، بهینه‌سازی باتری را برای SIMBridge غیرفعال کنید.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer8()
-                    FilledTonalButton(onClick = {
-                        try {
-                            ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.packageName)))
-                        } catch (e: Exception) {
-                            ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                        }
-                    }) { Text("غیرفعال کردن بهینه‌سازی باتری") }
-                }
-            }
-        }
-
-        item { SectionTitle("آنتن و سیم‌کارت") }
-        val sims = status?.sims.orEmpty()
-        if (sims.isEmpty()) {
-            item {
-                Card {
-                    Text(
-                        if (!running) "برای نمایش آنتن، سرویس را روشن کنید." else "سیم‌کارتی پیدا نشد یا دسترسی «تماس و آنتن» داده نشده است.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        } else {
-            items(sims, key = { it.subId }) { SimCard(it, multi = sims.size > 1) }
-        }
-        status?.let { s ->
-            item {
-                Card {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (s.battery.charging) Icons.Outlined.BatteryChargingFull else Icons.Outlined.BatteryStd, null,
-                            tint = if (s.battery.level <= 15 && !s.battery.charging) Brand.Poor else Brand.Good)
-                        HSpacer(8.dp)
-                        Text("باتری ${s.battery.level}٪" + if (s.battery.charging) " — در حال شارژ" else "")
-                        Spacer(Modifier.weight(1f))
-                        if (s.airplane) Chip("حالت پرواز", Brand.Fair)
-                    }
-                }
-            }
-        }
-
-        item { SectionTitle("آیفون‌ها") }
-        item {
-            Card {
-                Button(
-                    onClick = { BridgeHub.startPairing(); showPair = true },
-                    enabled = running,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Icon(Icons.Outlined.QrCode2, null)
-                    HSpacer(8.dp)
-                    Text("اتصال آیفون جدید", fontSize = 16.sp)
-                }
-                if (!running) {
-                    Spacer8()
-                    Text("ابتدا سرویس را روشن کنید.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (devices.isNotEmpty()) Spacer8()
-                devices.forEach { d ->
-                    val online = clients.any { it.deviceId == d.id }
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center,
-                        ) { Icon(Icons.Outlined.PhoneIphone, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
-                        HSpacer(12.dp)
-                        Column(Modifier.weight(1f)) {
-                            Text(d.name, fontWeight = FontWeight.SemiBold)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Dot(if (online) Brand.Good else MaterialTheme.colorScheme.outline, 8.dp)
-                                HSpacer(6.dp)
-                                Text(
-                                    if (online) "متصل" else "آخرین اتصال: " + relativeTime(d.lastSeen),
-                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        IconButton(onClick = { confirmRemove = d.id }) {
-                            Icon(Icons.Outlined.Delete, "حذف", tint = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
-            }
-        }
-
-        item { SectionTitle("اتصال") }
-        item {
-            Card {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Wifi, null, tint = MaterialTheme.colorScheme.primary)
-                    HSpacer(8.dp)
-                    Column {
-                        Text(if (addresses.isEmpty()) "به Wi-Fi وصل نیست" else "در شبکه محلی قابل دسترس است", fontWeight = FontWeight.SemiBold)
-                        if (addresses.isNotEmpty()) Text(
-                            addresses.joinToString("  ·  ") + " : " + BridgeHub.PORT,
-                            style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Spacer8()
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (ble) Icons.Outlined.Bluetooth else Icons.Outlined.BluetoothDisabled, null,
-                        tint = if (ble) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    HSpacer(8.dp)
-                    Column {
-                        Text(if (ble) "اعلان فوری بلوتوث فعال است" else "اعلان فوری بلوتوث غیرفعال", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            if (ble) "آیفون حتی وقتی اپ در پس‌زمینه است از پیامک و تماس باخبر می‌شود."
-                            else "بلوتوث را روشن کنید تا وقتی اپ آیفون بسته است هم اعلان برسد.",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Spacer8()
-                Text(
-                    "نکته: هر دو گوشی باید روی یک Wi-Fi باشند، یا آیفون به هات‌اسپات همین گوشی وصل شود (در این حالت آیفون اینترنت هم می‌گیرد).",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Switch(
+                    checked = running,
+                    onCheckedChange = { on -> if (on) BridgeService.start(ctx) else BridgeService.stop(ctx) },
                 )
             }
         }
 
         item {
-            Card {
-                Row(verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Outlined.Info, null, tint = Brand.Fair)
-                    HSpacer(8.dp)
+            StatusCard(
+                running = running,
+                connected = clients.map { it.name },
+                callState = call.state,
+                hasNetwork = addresses.isNotEmpty(),
+                error = serverError,
+                airplane = status?.airplane == true,
+            )
+        }
+
+        if (missing.isNotEmpty() || !batteryExempt) {
+            item { SectionLabel("تکمیل راه‌اندازی") }
+            item {
+                Card(padding = 12.dp) {
+                    missing.forEachIndexed { i, g ->
+                        if (i > 0) RowDivider()
+                        InfoRow(
+                            icon = permIcon(g.key),
+                            title = g.title + if (g.required) "" else "  ·  اختیاری",
+                            subtitle = g.reason,
+                            tint = if (g.required) MaterialTheme.colorScheme.primary else Brand.Muted,
+                        ) {
+                            FilledTonalButton(
+                                onClick = { permLauncher.launch(g.permissions.toTypedArray()) },
+                                contentPadding = PaddingValues(horizontal = 14.dp),
+                                modifier = Modifier.height(34.dp),
+                            ) { Text("اجازه", style = MaterialTheme.typography.labelLarge) }
+                        }
+                    }
+                    if (!batteryExempt) {
+                        if (missing.isNotEmpty()) RowDivider()
+                        InfoRow(
+                            icon = Icons.Outlined.BatteryAlert,
+                            title = "اجرای دائمی در پس‌زمینه",
+                            subtitle = "تا اتصال هنگام خاموش بودن صفحه قطع نشود",
+                            tint = Brand.Fair,
+                        ) {
+                            FilledTonalButton(
+                                onClick = {
+                                    try {
+                                        ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.packageName)))
+                                    } catch (e: Exception) {
+                                        ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 14.dp),
+                                modifier = Modifier.height(34.dp),
+                            ) { Text("فعال‌سازی", style = MaterialTheme.typography.labelLarge) }
+                        }
+                    }
+                    if (missing.size > 1) {
+                        VSpacer(8.dp)
+                        Button(
+                            onClick = { permLauncher.launch(missing.flatMap { it.permissions }.toTypedArray()) },
+                            modifier = Modifier.fillMaxWidth().height(46.dp),
+                            shape = RoundedCornerShape(14.dp),
+                        ) { Text("اجازه همه") }
+                    }
+                    TextButton(
+                        onClick = { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName))) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("اگر پنجره اجازه باز نشد: تنظیمات برنامه", style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+        }
+
+        item { SectionLabel("آنتن") }
+        item {
+            val sims = status?.sims.orEmpty()
+            Card(padding = 12.dp) {
+                if (sims.isEmpty()) {
                     Text(
-                        "صدای مکالمه: اندروید به برنامه‌ها اجازه انتقال صدای تماس سیم‌کارت را نمی‌دهد. از آیفون می‌توانید تماس را ببینید، پاسخ دهید، رد کنید، شماره بگیرید و بلندگو را روشن کنید؛ خود صحبت روی همین گوشی (یا هدست بلوتوثِ وصل به آن) انجام می‌شود.",
+                        if (!running) "برای نمایش آنتن، سرویس را روشن کنید." else "سیم‌کارتی پیدا نشد یا دسترسی «تماس و آنتن» داده نشده است.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(6.dp),
+                    )
+                }
+                sims.forEachIndexed { i, sim ->
+                    if (i > 0) RowDivider()
+                    SimRow(sim, multi = sims.size > 1)
+                }
+            }
+        }
+
+        item { SectionLabel("آیفون‌ها") }
+        item {
+            Card(padding = 12.dp) {
+                devices.forEachIndexed { i, d ->
+                    if (i > 0) RowDivider()
+                    val online = clients.any { it.deviceId == d.id }
+                    InfoRow(
+                        icon = Icons.Outlined.PhoneIphone,
+                        title = d.name,
+                        subtitle = if (online) "متصل" else "آخرین اتصال: " + relativeTime(d.lastSeen),
+                        tint = if (online) Brand.Good else Brand.Muted,
+                    ) {
+                        IconButton(onClick = { confirmRemove = d.id }) {
+                            Icon(Icons.Outlined.Close, "حذف", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                if (devices.isNotEmpty()) VSpacer(8.dp)
+                Button(
+                    onClick = { BridgeHub.startPairing(); showPair = true },
+                    enabled = running,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Icon(Icons.Outlined.QrCode2, null, Modifier.size(20.dp))
+                    HSpacer(8.dp)
+                    Text(if (devices.isEmpty()) "اتصال آیفون" else "اتصال آیفون دیگر")
+                }
+                if (!running) {
+                    Text(
+                        "ابتدا سرویس را روشن کنید.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp), textAlign = TextAlign.Center,
                     )
                 }
             }
         }
-        item { Spacer(Modifier.height(24.dp)) }
+
+        item { SectionLabel("ارتباط") }
+        item {
+            Card(padding = 12.dp) {
+                InfoRow(
+                    icon = if (addresses.isEmpty()) Icons.Outlined.WifiOff else Icons.Outlined.Wifi,
+                    title = if (addresses.isEmpty()) "به Wi-Fi یا هات‌اسپات وصل نیست" else "شبکه محلی",
+                    subtitle = if (addresses.isEmpty()) "آیفون باید روی همان Wi-Fi یا هات‌اسپات این گوشی باشد"
+                    else "‎" + addresses.joinToString("  ·  "),
+                    tint = if (addresses.isEmpty()) Brand.Fair else MaterialTheme.colorScheme.primary,
+                )
+                RowDivider()
+                InfoRow(
+                    icon = if (ble) Icons.Outlined.Bluetooth else Icons.Outlined.BluetoothDisabled,
+                    title = if (ble) "اعلان فوری بلوتوث" else "اعلان فوری بلوتوث خاموش",
+                    subtitle = if (ble) "آیفون حتی در پس‌زمینه باخبر می‌شود" else "بلوتوث را روشن کنید و دسترسی «دستگاه‌های نزدیک» را بدهید",
+                    tint = if (ble) MaterialTheme.colorScheme.primary else Brand.Muted,
+                )
+                RowDivider()
+                InfoRow(
+                    icon = Icons.Outlined.Lock,
+                    title = "رمزنگاری سرتاسری",
+                    subtitle = "مستقیم بین دو گوشی، بدون سرور",
+                    tint = Brand.Good,
+                )
+            }
+        }
+
+        item {
+            Text(
+                "صدای مکالمه روی همین گوشی (یا هدست بلوتوثِ وصل به آن) است؛ اندروید اجازه انتقال صدای تماس سیم‌کارت را به برنامه‌ها نمی‌دهد. پاسخ، رد، شماره‌گیری، بلندگو و بی‌صدا از آیفون کار می‌کند.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 16.dp),
+            )
+        }
     }
 
     if (showPair && pairing != null) {
         PairDialog(onClose = { showPair = false; BridgeHub.stopPairing() })
     } else if (showPair && pairing == null && pending == null) {
-        // Pairing finished (QR consumed) or expired.
         LaunchedEffect(Unit) { showPair = false }
     }
 
@@ -368,20 +367,23 @@ fun HomeScreen() {
         AlertDialog(
             onDismissRequest = {},
             icon = { Icon(Icons.Outlined.PhoneIphone, null) },
-            title = { Text("اتصال «${req.name}»؟", textAlign = TextAlign.Center) },
+            title = { Text("اتصال «${req.name}»", textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Text("فقط اگر همین کد روی آیفون نمایش داده می‌شود تأیید کنید:", textAlign = TextAlign.Center)
-                    Spacer(Modifier.height(12.dp))
                     Text(
-                        req.code.toCharArray().joinToString(" "),
-                        fontSize = 36.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp,
+                        "اگر همین کد روی آیفون نمایش داده می‌شود، تأیید کنید.",
+                        textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    VSpacer(16.dp)
+                    Text(
+                        req.code.toCharArray().joinToString("  "),
+                        style = MaterialTheme.typography.displaySmall.copy(textDirection = TextDirection.Ltr, letterSpacing = 2.sp),
                         color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.displaySmall.copy(textDirection = TextDirection.Ltr),
                     )
                 }
             },
-            confirmButton = { Button(onClick = { BridgeHub.resolvePairing(true) }) { Text("تأیید و اتصال") } },
+            confirmButton = { Button(onClick = { BridgeHub.resolvePairing(true) }) { Text("تأیید") } },
             dismissButton = { TextButton(onClick = { BridgeHub.resolvePairing(false) }) { Text("رد") } },
         )
     }
@@ -389,7 +391,7 @@ fun HomeScreen() {
     confirmRemove?.let { id ->
         AlertDialog(
             onDismissRequest = { confirmRemove = null },
-            title = { Text("حذف این آیفون؟") },
+            title = { Text("حذف این آیفون؟", style = MaterialTheme.typography.titleLarge) },
             text = { Text("اتصال این آیفون قطع می‌شود و برای اتصال دوباره باید QR جدید اسکن شود.") },
             confirmButton = {
                 Button(
@@ -403,90 +405,95 @@ fun HomeScreen() {
 }
 
 @Composable
-private fun HeaderCard(running: Boolean, connected: List<String>, callState: String, error: String?, onToggle: (Boolean) -> Unit) {
-    val gradient = Brush.linearGradient(listOf(Color(0xFF3D5AFE), Color(0xFF00B8D4)))
-    Box(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(gradient).padding(20.dp)
-    ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("SIMBridge", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Black)
-                    Text("پل سیم‌کارت به آیفون", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp)
-                }
-                Switch(checked = running, onCheckedChange = onToggle)
-            }
-            Spacer(Modifier.height(18.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Dot(
+private fun StatusCard(
+    running: Boolean,
+    connected: List<String>,
+    callState: String,
+    hasNetwork: Boolean,
+    error: String?,
+    airplane: Boolean,
+) {
+    val color = when {
+        !running -> Brand.Muted
+        error != null -> Brand.Poor
+        connected.isNotEmpty() -> Brand.Good
+        else -> Brand.Fair
+    }
+    val animated by animateColorAsState(color, label = "status")
+    val (title, subtitle) = when {
+        !running -> "خاموش" to "برای استفاده از آیفون، سرویس را روشن کنید"
+        error != null -> "خطای شبکه" to error
+        connected.isNotEmpty() -> ("متصل به " + connected.joinToString("، ")) to "پیامک، تماس و آنتن روی آیفون در دسترس است"
+        !hasNetwork -> "در انتظار شبکه" to "به Wi-Fi وصل شوید یا هات‌اسپات را روشن کنید"
+        else -> "آماده" to "در انتظار اتصال آیفون"
+    }
+    Card(padding = 18.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(52.dp).clip(CircleShape).background(animated.copy(alpha = 0.14f))
+                    .border(1.5.dp, animated.copy(alpha = 0.35f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
                     when {
-                        !running -> Color.White.copy(alpha = 0.5f)
-                        connected.isNotEmpty() -> Color(0xFF69F0AE)
-                        else -> Color(0xFFFFE57F)
-                    }, 12.dp
-                )
-                HSpacer(8.dp)
-                Text(
-                    when {
-                        !running -> "سرویس خاموش است"
-                        connected.isNotEmpty() -> "متصل به " + connected.joinToString("، ")
-                        else -> "روشن — در انتظار آیفون"
+                        !running -> Icons.Outlined.PowerSettingsNew
+                        connected.isNotEmpty() -> Icons.Outlined.Link
+                        else -> Icons.Outlined.LinkOff
                     },
-                    color = Color.White, fontWeight = FontWeight.SemiBold,
+                    null, tint = animated, modifier = Modifier.size(26.dp),
                 )
             }
-            if (callState != "idle") {
-                Spacer(Modifier.height(6.dp))
-                Text(if (callState == "ringing") "📞 تماس ورودی" else "📞 در حال مکالمه", color = Color.White)
+            HSpacer(14.dp)
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (running && error != null) {
-                Spacer(Modifier.height(6.dp))
-                Text("خطای شبکه: $error", color = Color(0xFFFFCDD2), fontSize = 12.sp)
+        }
+        if (running && (callState != "idle" || airplane)) {
+            VSpacer(12.dp)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (callState == "ringing") Chip("تماس ورودی", Brand.Good)
+                if (callState == "offhook") Chip("در حال مکالمه", Brand.Good)
+                if (airplane) Chip("حالت پرواز", Brand.Fair)
             }
         }
     }
 }
 
 @Composable
-private fun SimCard(sim: SimState, multi: Boolean) {
+private fun SimRow(sim: SimState, multi: Boolean) {
     val inService = sim.service == "in"
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SignalBars(sim.level, inService, height = 34.dp, barWidth = 8.dp)
-            HSpacer(16.dp)
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(sim.carrier.ifBlank { sim.displayName }, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                    if (sim.gen.isNotBlank()) { HSpacer(8.dp); Chip(sim.gen) }
-                    if (sim.roaming) { HSpacer(6.dp); Chip("رومینگ", Brand.Fair) }
-                }
-                Text(
-                    buildString {
-                        if (multi) append("سیم ${sim.slot + 1} · ")
-                        append(
-                            when (sim.service) {
-                                "in" -> "در سرویس"
-                                "out" -> "بدون آنتن"
-                                "emergency" -> "فقط تماس اضطراری"
-                                "off" -> "رادیو خاموش"
-                                else -> "در حال بررسی"
-                            }
-                        )
-                        sim.dbm?.let { append(" · ").append("‎$it dBm") }
-                        if (sim.net.isNotBlank()) append(" · ").append(sim.net)
-                    },
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (multi) {
-                    val roles = listOfNotNull(
-                        "پیامک".takeIf { sim.isDefaultSms }, "تماس".takeIf { sim.isDefaultVoice }, "اینترنت".takeIf { sim.isDefaultData },
-                    )
-                    if (roles.isNotEmpty()) Text(
-                        "پیش‌فرض: " + roles.joinToString("، "),
-                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
-                    )
-                }
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
+            SignalBars(sim.level, inService, height = 20.dp, barWidth = 5.dp)
+        }
+        HSpacer(12.dp)
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(sim.carrier.ifBlank { sim.displayName }, style = MaterialTheme.typography.titleSmall)
+                if (sim.gen.isNotBlank()) Chip(sim.gen)
+                if (sim.roaming) Chip("رومینگ", Brand.Fair)
             }
+            Text(
+                buildString {
+                    if (multi) append("سیم ${sim.slot + 1}".fa()).append("  ·  ")
+                    append(
+                        when (sim.service) {
+                            "in" -> "در سرویس"
+                            "out" -> "بدون آنتن"
+                            "emergency" -> "فقط تماس اضطراری"
+                            "off" -> "رادیو خاموش"
+                            else -> "در حال بررسی"
+                        }
+                    )
+                    sim.dbm?.let { append("  ·  ").append("‎$it dBm‏") }
+                },
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (multi) {
+            val roles = listOfNotNull("پیامک".takeIf { sim.isDefaultSms }, "تماس".takeIf { sim.isDefaultVoice })
+            if (roles.isNotEmpty()) Text(roles.joinToString("، "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -499,7 +506,7 @@ private fun PairDialog(onClose: () -> Unit) {
     LaunchedEffect(s) {
         while (true) {
             now = System.currentTimeMillis()
-            if (now >= s.expiresAt) BridgeHub.startPairing() // refresh expired code automatically
+            if (now >= s.expiresAt) BridgeHub.startPairing() // refresh an expired code automatically
             delay(1000)
         }
     }
@@ -509,42 +516,40 @@ private fun PairDialog(onClose: () -> Unit) {
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier.padding(20.dp).fillMaxWidth(),
+            modifier = Modifier.padding(24.dp).fillMaxWidth(),
         ) {
-            Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("اتصال آیفون", fontWeight = FontWeight.Black, fontSize = 22.sp)
-                Spacer(Modifier.height(6.dp))
+            Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("اتصال آیفون", style = MaterialTheme.typography.titleLarge)
+                VSpacer(6.dp)
                 Text(
-                    "در اپ SIMBridge آیفون «اسکن QR» را بزنید و این کد را اسکن کنید.",
-                    textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    "در اپ SIMBridge آیفون «اسکن QR» را بزنید.",
+                    textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(16.dp))
+                VSpacer(20.dp)
                 Box(
-                    Modifier.fillMaxWidth(0.85f).aspectRatio(1f).clip(RoundedCornerShape(20.dp)).background(Color.White).padding(12.dp)
-                ) {
-                    Image(qr, "QR", Modifier.fillMaxSize())
-                }
-                Spacer(Modifier.height(12.dp))
-                Text("اعتبار: ${left / 60}:${(left % 60).toString().padStart(2, '0')}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                    Modifier.fillMaxWidth(0.82f).aspectRatio(1f).clip(RoundedCornerShape(20.dp))
+                        .background(Color.White).padding(16.dp)
+                ) { Image(qr, "QR", Modifier.fillMaxSize()) }
+                VSpacer(14.dp)
+                Text(
+                    "اعتبار ${left / 60}:${(left % 60).toString().padStart(2, '0')}".fa(),
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 if (hosts.isEmpty()) {
-                    Spacer(Modifier.height(8.dp))
+                    VSpacer(8.dp)
                     Text(
-                        "این گوشی به هیچ Wi-Fi یا هات‌اسپاتی وصل نیست؛ آیفون نمی‌تواند به آن برسد.",
-                        color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, fontSize = 13.sp,
+                        "این گوشی به Wi-Fi یا هات‌اسپات وصل نیست؛ آیفون به آن نمی‌رسد.",
+                        color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                Spacer(Modifier.height(14.dp))
+                VSpacer(16.dp)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = { BridgeHub.startPairing() }) { Text("کد جدید") }
-                    Button(onClick = onClose) { Text("بستن") }
-                }
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.CheckCircle, null, tint = Brand.Good, modifier = Modifier.size(16.dp))
-                    HSpacer(6.dp)
-                    Text("رمزنگاری سرتاسری AES-256 · هر کد فقط یک‌بار", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = { BridgeHub.startPairing() }) { Text("کد جدید") }
+                    Button(onClick = onClose, shape = RoundedCornerShape(14.dp)) { Text("بستن") }
                 }
             }
         }

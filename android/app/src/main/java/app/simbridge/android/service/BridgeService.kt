@@ -70,7 +70,14 @@ class BridgeService : Service() {
             BridgeHub.broadcast(JSONObject().put("t", "sms").put("msg", msg))
             BridgeHub.wakeClients()
         }
-        BridgeHub.refreshTelephony = { main.post { contacts.clearCache(); monitor.rebuild(); ble?.let { it.stop(); it.start() } } }
+        BridgeHub.refreshTelephony = {
+            main.post {
+                contacts.clearCache()
+                monitor.rebuild()
+                // Only restart BLE when it is not already advertising (restarting drops the iPhone's link).
+                if (!BridgeHub.bleActive.value) ble?.let { it.stop(); it.start() }
+            }
+        }
 
         startServer()
         nsd = NsdAdvertiser(this).also { it.register() }
@@ -167,7 +174,13 @@ class BridgeService : Service() {
                 put("time", System.currentTimeMillis())
             }
             "status" -> monitor.snapshot().toJson()
-            "threads" -> JSONObject().put("threads", sms.threads(req.optInt("limit", 60).coerceIn(1, 200)))
+            "threads" -> {
+                val marks = HashMap<Long, Long>()
+                req.optJSONObject("readMarks")?.let { o ->
+                    o.keys().forEach { k -> k.toLongOrNull()?.let { marks[it] = o.optLong(k) } }
+                }
+                JSONObject().put("threads", sms.threads(req.optInt("limit", 60).coerceIn(1, 200), marks))
+            }
             "messages" -> {
                 val tid = req.optLong("threadId", -1L)
                 if (tid < 0) throw BridgeError("bad_request")

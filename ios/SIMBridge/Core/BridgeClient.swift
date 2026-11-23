@@ -74,12 +74,16 @@ final class BridgeClient {
     private var bonjour: [NWEndpoint] = []
     private var lastGoodHost: String?
     private var readyWaiters: [(Bool) -> Void] = []
+    /// While pairing, failed attempts are retried silently until this moment (covers the
+    /// iOS "Local Network" permission prompt and a slow Wi-Fi join).
+    private var pairDeadline = Date.distantPast
 
     // MARK: - Public
 
     func connect(_ mode: Mode) {
         self.mode = mode
         retryDelay = 1
+        if case .pair = mode { pairDeadline = Date().addingTimeInterval(45) }
         if case .device(let p) = mode { startBrowsing(serverId: p.serverId) }
         if case .pair(let o) = mode { startBrowsing(serverId: o.serverId) }
         attempt()
@@ -175,7 +179,8 @@ final class BridgeClient {
         let gen = generation
         let endpoints = candidates()
         guard !endpoints.isEmpty else {
-            fail("آدرسی برای گوشی اندروید پیدا نشد. هر دو گوشی باید روی یک شبکه باشند.")
+            state = .connecting
+            fail("آدرسی برای گوشی اندروید پیدا نشد. هر دو گوشی باید روی یک Wi-Fi باشند.")
             return
         }
         state = .connecting
@@ -188,7 +193,7 @@ final class BridgeClient {
             }
             c.start(queue: .main)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 7) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
             guard let self, gen == self.generation, self.conn == nil else { return }
             self.fail("گوشی اندروید در دسترس نیست")
         }
@@ -213,10 +218,13 @@ final class BridgeClient {
             }
             receive(c)
             sendHello()
-        case .failed, .waiting:
+        case .failed:
             c.cancel()
             racing.removeAll { $0 === c }
             if racing.isEmpty && conn == nil { fail("گوشی اندروید در دسترس نیست") }
+        case .waiting:
+            // Not fatal (e.g. Local Network permission pending, Wi-Fi joining). The attempt timeout decides.
+            break
         case .cancelled:
             racing.removeAll { $0 === c }
         default:
@@ -243,6 +251,14 @@ final class BridgeClient {
 
     private func fail(_ reason: String) {
         teardown()
+        if case .pair = mode, Date() < pairDeadline {
+            state = .connecting
+            retryWork?.cancel()
+            let w = DispatchWorkItem { [weak self] in self?.attempt() }
+            retryWork = w
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: w)
+            return
+        }
         state = .failed(reason)
         scheduleRetry()
     }

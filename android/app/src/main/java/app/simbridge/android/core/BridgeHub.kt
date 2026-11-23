@@ -2,6 +2,8 @@ package app.simbridge.android.core
 
 import android.content.Context
 import android.os.Build
+import android.util.Log
+import app.simbridge.android.BuildConfig
 import app.simbridge.android.net.BleWake
 import app.simbridge.android.net.BridgeServer
 import app.simbridge.android.net.NetUtil
@@ -65,6 +67,7 @@ object BridgeHub {
             "&k=" + Crypto.b64url(key)
         val s = PairingSession(key, System.currentTimeMillis() + PAIRING_TTL_MS, payload)
         _pairing.value = s
+        if (BuildConfig.DEBUG) Log.i("SIMBridgeTest", "PAIR $payload")
         return s
     }
 

@@ -30,6 +30,7 @@ struct OnboardingView: View {
             }
         }
         .sheet(isPresented: $showScanner) { scannerSheet }
+        .onAppear { LocalNetwork.requestPermission() }
         .alert("کد معتبر نیست", isPresented: $invalidCode) {
             Button("باشه", role: .cancel) {}
         } message: {
@@ -40,15 +41,14 @@ struct OnboardingView: View {
     private var hero: some View {
         VStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Theme.gradient)
-                    .frame(width: 96, height: 96)
-                    .shadow(color: Theme.indigo.opacity(0.35), radius: 18, y: 8)
-                Image(systemName: "simcard.fill").font(.system(size: 44, weight: .semibold)).foregroundStyle(.white)
+                RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Theme.gradient)
+                    .frame(width: 88, height: 88)
+                Image(systemName: "simcard.fill").font(.system(size: 40, weight: .semibold)).foregroundStyle(.white)
             }
             .padding(.top, 30)
-            Text("SIMBridge").font(.system(size: 34, weight: .black, design: .rounded))
+            Text("SIMBridge").font(.system(size: 32, weight: .bold, design: .rounded))
             Text("پیامک، تماس و آنتنِ سیم‌کارتِ گوشی اندرویدی‌تان، روی آیفون")
-                .font(.headline)
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
@@ -58,7 +58,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             step(1, "اپ SIMBridge را روی گوشی اندروید نصب و دسترسی‌ها را تأیید کنید.", "iphone")
             step(2, "هر دو گوشی را به یک Wi-Fi وصل کنید، یا آیفون را به هات‌اسپات گوشی اندروید.", "wifi")
-            step(3, "در اندروید «اتصال آیفون جدید» را بزنید و QR را با دکمه زیر اسکن کنید.", "qrcode.viewfinder")
+            step(3, "در اندروید «اتصال آیفون» را بزنید و QR را با دکمه زیر اسکن کنید.", "qrcode.viewfinder")
         }
         .card()
     }
@@ -85,7 +85,7 @@ struct OnboardingView: View {
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .foregroundStyle(.white)
             }
             Button("وارد کردن دستی لینک اتصال") { showManual.toggle() }

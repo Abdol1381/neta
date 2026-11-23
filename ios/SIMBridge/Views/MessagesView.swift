@@ -4,6 +4,7 @@ struct ThreadsView: View {
     @EnvironmentObject var model: AppModel
     @State private var search = ""
     @State private var showCompose = false
+    @State private var path: [SmsThread] = []
 
     private var filtered: [SmsThread] {
         let q = search.trimmingCharacters(in: .whitespaces)
@@ -12,7 +13,7 @@ struct ThreadsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if model.threads.isEmpty {
                     EmptyState(
@@ -38,6 +39,9 @@ struct ThreadsView: View {
                 }
             }
             .sheet(isPresented: $showCompose) { ComposeView().environmentObject(model) }
+            .onChange(of: model.threads.count) { n in
+                if TestHooks.openFirstThread, path.isEmpty, n > 0 { path = [model.threads[0]] }
+            }
         }
     }
 }
@@ -174,8 +178,8 @@ struct Bubble: View {
 
     var body: some View {
         HStack {
-            if message.out { Spacer(minLength: 50) }
-            VStack(alignment: message.out ? .trailing : .leading, spacing: 3) {
+            if !message.out { Spacer(minLength: 56) }
+            VStack(alignment: .leading, spacing: 3) {
                 Text(message.body)
                     .font(.body)
                     .foregroundStyle(message.out ? Color.white : Color.primary)
@@ -190,10 +194,10 @@ struct Bubble: View {
             .padding(.horizontal, 13)
             .padding(.vertical, 8)
             .background(
-                message.out ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Theme.card),
+                message.out ? Theme.accent : Theme.card,
                 in: RoundedRectangle(cornerRadius: 18, style: .continuous)
             )
-            if !message.out { Spacer(minLength: 50) }
+            if message.out { Spacer(minLength: 56) }
         }
     }
 

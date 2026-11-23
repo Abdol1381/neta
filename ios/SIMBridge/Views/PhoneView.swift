@@ -2,7 +2,7 @@ import SwiftUI
 
 struct PhoneView: View {
     @EnvironmentObject var model: AppModel
-    @State private var segment = 0
+    @State private var segment = TestHooks.phoneSegment
 
     var body: some View {
         NavigationStack {
@@ -26,6 +26,8 @@ struct PhoneView: View {
 struct KeypadView: View {
     @EnvironmentObject var model: AppModel
     @State private var number = ""
+    /// Set by a long press so the button tap that follows on finger-up is ignored.
+    @State private var suppressTap = false
     @State private var subId: Int?
 
     private struct Key: Identifiable {
@@ -42,74 +44,88 @@ struct KeypadView: View {
     ]
 
     var body: some View {
-        VStack(spacing: 14) {
-            Spacer(minLength: 8)
-            VStack(spacing: 4) {
-                Text(number.isEmpty ? " " : number)
-                    .font(.system(size: 36, weight: .medium, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .frame(maxWidth: .infinity)
-                    .ltr()
-                Text(model.displayName(for: number) ?? " ")
-                    .font(.subheadline).foregroundStyle(Theme.indigo)
-            }
-            .padding(.horizontal, 24)
+        GeometryReader { geo in
+            // Size keys to the space available so the pad fits from iPhone SE to Pro Max.
+            let key = min(78, max(56, (geo.size.height - 250) / 5.2))
+            let gap = key * 0.24
+            VStack(spacing: gap * 0.8) {
+                Spacer(minLength: 4)
+                VStack(spacing: 4) {
+                    Text(number.isEmpty ? " " : number)
+                        .font(.system(size: 34, weight: .medium, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .frame(maxWidth: .infinity)
+                        .ltr()
+                    Text(model.displayName(for: number) ?? " ")
+                        .font(.subheadline).foregroundStyle(Theme.accent)
+                }
+                .padding(.horizontal, 24)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(84), spacing: 22), count: 3), spacing: 16) {
-                ForEach(keys) { k in
-                    Button {
-                        if number.count < 32 { number.append(k.digit) }
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    } label: {
-                        VStack(spacing: 0) {
-                            Text(k.digit).font(.system(size: 34, weight: .regular, design: .rounded))
-                            Text(k.letters).font(.system(size: 10, weight: .semibold)).opacity(0.6).frame(height: 12)
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(key), spacing: gap * 1.3), count: 3), spacing: gap) {
+                    ForEach(keys) { k in
+                        Button {
+                            if suppressTap { suppressTap = false; return }
+                            if number.count < 32 { number.append(k.digit) }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        } label: {
+                            VStack(spacing: 0) {
+                                Text(k.digit).font(.system(size: key * 0.42, weight: .regular, design: .rounded))
+                                Text(k.letters).font(.system(size: 9, weight: .semibold)).opacity(0.55).frame(height: 11)
+                            }
+                            .frame(width: key, height: key)
+                            .background(Theme.card, in: Circle())
+                            .foregroundStyle(.primary)
                         }
-                        .frame(width: 80, height: 80)
-                        .background(Theme.card, in: Circle())
-                        .foregroundStyle(.primary)
+                        .buttonStyle(.plain)
+                        .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                            guard k.digit == "0", number.count < 32 else { return }
+                            suppressTap = true
+                            number.append("+")
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        })
                     }
-                    .buttonStyle(.plain)
-                    .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
-                        if k.digit == "0" { number = String(number.dropLast()) + "+" }
+                }
+                .ltr()
+
+                HStack(spacing: gap * 1.3) {
+                    Group {
+                        if model.sims.count > 1 { SimPicker(subId: $subId) } else { Color.clear }
+                    }
+                    .frame(width: key, height: key)
+
+                    Button {
+                        model.dial(number, subId: subId)
+                    } label: {
+                        Image(systemName: "phone.fill")
+                            .font(.system(size: key * 0.36))
+                            .foregroundStyle(.white)
+                            .frame(width: key, height: key)
+                            .background(canCall ? Theme.good : Color.gray.opacity(0.35), in: Circle())
+                    }
+                    .disabled(!canCall)
+
+                    Button {
+                        if suppressTap { suppressTap = false; return }
+                        if !number.isEmpty { number.removeLast() }
+                    } label: {
+                        Image(systemName: "delete.left").font(.system(size: 24)).foregroundStyle(.secondary)
+                            .frame(width: key, height: key)
+                    }
+                    .opacity(number.isEmpty ? 0 : 1)
+                    .allowsHitTesting(!number.isEmpty)
+                    .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+                        suppressTap = true
+                        number = ""
                     })
                 }
+                .ltr()
+
+                Text(model.conn.isReady ? " " : "برای تماس، اتصال به گوشی اندروید لازم است")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer(minLength: 4)
             }
-            .ltr()
-
-            HStack(spacing: 36) {
-                Group {
-                    if model.sims.count > 1 { SimPicker(subId: $subId) } else { Color.clear }
-                }
-                .frame(width: 64, height: 64)
-
-                Button {
-                    model.dial(number, subId: subId)
-                } label: {
-                    Image(systemName: "phone.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(.white)
-                        .frame(width: 80, height: 80)
-                        .background(canCall ? Theme.good : Color.gray.opacity(0.4), in: Circle())
-                }
-                .disabled(!canCall)
-
-                Button {
-                    if !number.isEmpty { number.removeLast() }
-                } label: {
-                    Image(systemName: "delete.left.fill").font(.system(size: 26)).foregroundStyle(.secondary)
-                        .frame(width: 64, height: 64)
-                }
-                .opacity(number.isEmpty ? 0 : 1)
-                .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in number = "" })
-            }
-            .ltr()
-
-            if !model.conn.isReady {
-                Text("برای تماس، اتصال به گوشی اندروید لازم است").font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 

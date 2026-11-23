@@ -96,15 +96,18 @@ class CallController(private val context: Context, private val contacts: Contact
             }
             TelephonyManager.EXTRA_STATE_IDLE -> {
                 if (cur.state == "idle") return
-                if (cur.state == "ringing" && !sawOffhook) {
+                val missed = cur.state == "ringing" && !sawOffhook
+                if (missed) {
                     BridgeHub.broadcast(JSONObject().apply {
                         put("t", "missed"); put("number", cur.number); put("name", cur.name)
                         put("date", cur.since); put("rejected", endedByUs)
                     })
-                    if (!endedByUs) BridgeHub.wakeClients()
                 }
                 publish(CallInfo.IDLE, wake = false)
                 lastDialed = null
+                // Wake a backgrounded iPhone so it clears the "incoming call" notification. For a missed
+                // call wait a moment: the dialer writes the call-log entry the iPhone reads on sync.
+                main.postDelayed({ BridgeHub.wakeClients() }, if (missed) 2500L else 300L)
             }
         }
     }

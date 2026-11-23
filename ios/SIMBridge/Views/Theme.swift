@@ -1,17 +1,20 @@
 import SwiftUI
 
 enum Theme {
-    static let indigo = Color(red: 0.24, green: 0.35, blue: 1.0)
-    static let cyan = Color(red: 0.0, green: 0.72, blue: 0.83)
-    static let good = Color(red: 0.0, green: 0.78, blue: 0.33)
-    static let fair = Color(red: 1.0, green: 0.67, blue: 0.0)
-    static let poor = Color(red: 1.0, green: 0.32, blue: 0.32)
-    static let gradient = LinearGradient(colors: [indigo, cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let accent = Color(red: 0.29, green: 0.36, blue: 1.0)
+    static let indigo = accent
+    static let good = Color(red: 0.09, green: 0.64, blue: 0.29)
+    static let fair = Color(red: 0.96, green: 0.62, blue: 0.04)
+    static let poor = Color(red: 0.94, green: 0.27, blue: 0.27)
+    static let muted = Color(red: 0.60, green: 0.63, blue: 0.70)
+    static let gradient = LinearGradient(colors: [accent, Color(red: 0.42, green: 0.36, blue: 1.0)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing)
     static let card = Color(uiColor: .secondarySystemGroupedBackground)
     static let background = Color(uiColor: .systemGroupedBackground)
+    static let separator = Color(uiColor: .separator).opacity(0.5)
 
     static func signalColor(_ level: Int, inService: Bool) -> Color {
-        guard inService, level > 0 else { return .gray }
+        guard inService, level > 0 else { return muted }
         switch level {
         case 1: return poor
         case 2: return fair
@@ -21,24 +24,65 @@ enum Theme {
 }
 
 struct CardModifier: ViewModifier {
+    var padding: CGFloat = 16
+
     func body(content: Content) -> some View {
         content
-            .padding(16)
+            .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: .black.opacity(0.04), radius: 8, y: 3)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
 extension View {
-    func card() -> some View { modifier(CardModifier()) }
+    func card(padding: CGFloat = 16) -> some View { modifier(CardModifier(padding: padding)) }
 
     /// Phone numbers, codes and keypads read left-to-right even inside the RTL UI.
     func ltr() -> some View { environment(\.layoutDirection, .leftToRight) }
 }
 
-/// Antenna bars 0…4 (always drawn left-to-right like a status bar).
+/// Small tinted rounded-square icon used in rows.
+struct IconBadge: View {
+    var systemName: String
+    var tint: Color = Theme.accent
+    var size: CGFloat = 34
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: size * 0.46, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: size, height: size)
+            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+    }
+}
+
+struct SectionHeader: View {
+    var title: String
+
+    var body: some View {
+        Text(title)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.leading, 6)
+            .padding(.top, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct Tag: View {
+    var text: String
+    var color: Color = Theme.accent
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.12), in: Capsule())
+    }
+}
+
 struct SignalBarsView: View {
     var level: Int
     var inService: Bool
@@ -49,8 +93,8 @@ struct SignalBarsView: View {
         HStack(alignment: .bottom, spacing: barWidth / 2) {
             ForEach(1...4, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(inService && i <= level ? Theme.signalColor(level, inService: inService) : Color.gray.opacity(0.25))
-                    .frame(width: barWidth, height: height * CGFloat(i) / 4)
+                    .fill(inService && i <= level ? Theme.signalColor(level, inService: inService) : Color.gray.opacity(0.22))
+                    .frame(width: barWidth, height: height * [0.34, 0.56, 0.78, 1.0][i - 1])
             }
         }
         .frame(height: height, alignment: .bottom)
@@ -67,24 +111,23 @@ struct Avatar: View {
     private var initials: String {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard let first = trimmed.first, !first.isNumber, first != "+" else { return "" }
-        let parts = trimmed.split(separator: " ")
-        let chars = parts.prefix(2).compactMap { $0.first }
-        return String(chars)
+        // One letter reads cleanly for both Persian (joined script) and Latin names.
+        return String(first).uppercased()
     }
 
     private var color: Color {
-        let palette: [Color] = [Theme.indigo, Theme.cyan, .purple, .orange, .pink, .teal, .green]
+        let palette: [Color] = [Theme.accent, .indigo, .purple, .orange, .pink, .teal, .green, .blue]
         let h = abs(name.unicodeScalars.reduce(0) { ($0 &* 31) &+ Int($1.value) })
         return palette[h % palette.count]
     }
 
     var body: some View {
         ZStack {
-            Circle().fill(color.gradient)
+            Circle().fill(color.opacity(0.16))
             if initials.isEmpty {
-                Image(systemName: "person.fill").foregroundStyle(.white).font(.system(size: size * 0.42))
+                Image(systemName: "person.fill").foregroundStyle(color).font(.system(size: size * 0.42))
             } else {
-                Text(initials).foregroundStyle(.white).font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
+                Text(initials).foregroundStyle(color).font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
             }
         }
         .frame(width: size, height: size)

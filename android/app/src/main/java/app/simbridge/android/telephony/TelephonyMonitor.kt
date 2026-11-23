@@ -24,6 +24,7 @@ import androidx.core.content.ContextCompat
 import app.simbridge.android.core.BatteryState
 import app.simbridge.android.core.DeviceStatus
 import app.simbridge.android.core.SimState
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
 
 /** Tracks per-SIM antenna (signal level, dBm, network type, operator), battery and airplane mode. */
@@ -40,7 +41,8 @@ class TelephonyMonitor(private val context: Context, private val onChange: (Devi
         var unregister: () -> Unit = {}
     }
 
-    private val lives = mutableListOf<Live>()
+    // Read from request worker threads (snapshot) while the main thread rebuilds it.
+    private val lives = CopyOnWriteArrayList<Live>()
     private var battery = BatteryState(0, false)
     private var running = false
     private var pending = false
@@ -80,18 +82,23 @@ class TelephonyMonitor(private val context: Context, private val onChange: (Devi
 
     /** Re-subscribe after permissions were granted or SIMs changed. */
     fun rebuild() {
-        lives.forEach { it.unregister() }
-        lives.clear()
-        val base = tm ?: return
+        val old = lives.toList()
+        val base = tm ?: run { lives.clear(); old.forEach { it.unregister() }; return }
         val subs = activeSubs()
-        if (subs.isEmpty()) {
-            lives += Live(SubscriptionManager.INVALID_SUBSCRIPTION_ID, null, base).also { listen(it) }
+        val next = if (subs.isEmpty()) {
+            // No READ_PHONE_STATE yet (or no SIM): still show the default modem's signal.
+            listOf(Live(SubscriptionManager.INVALID_SUBSCRIPTION_ID, null, base))
         } else {
-            subs.forEach { info ->
+            subs.map { info ->
                 val subTm = try { base.createForSubscriptionId(info.subscriptionId) } catch (e: Exception) { base }
-                lives += Live(info.subscriptionId, info, subTm).also { listen(it) }
+                Live(info.subscriptionId, info, subTm)
             }
         }
+        old.forEach { it.unregister() }
+        next.forEach { listen(it) }
+        lives.clear()
+        lives.addAll(next)
+        last = null
         changed()
     }
 
@@ -99,14 +106,14 @@ class TelephonyMonitor(private val context: Context, private val onChange: (Devi
         val defSms = SubscriptionManager.getDefaultSmsSubscriptionId()
         val defVoice = SubscriptionManager.getDefaultVoiceSubscriptionId()
         val defData = SubscriptionManager.getDefaultDataSubscriptionId()
-        val sims = lives.map { l ->
+        val sims = lives.toList().map { l ->
             val ss = l.service
             val level = l.signal?.level ?: 0
             val inService = ss?.state == ServiceState.STATE_IN_SERVICE
             val type = networkType(l.tm)
             SimState(
                 subId = l.subId,
-                slot = l.info?.simSlotIndex ?: 0,
+                slot = (l.info?.simSlotIndex ?: 0).coerceAtLeast(0),
                 carrier = listOfNotNull(ss?.operatorAlphaShort, ss?.operatorAlphaLong, l.info?.carrierName?.toString(), safe { l.tm.networkOperatorName })
                     .firstOrNull { it.isNotBlank() } ?: "",
                 displayName = l.info?.displayName?.toString() ?: "SIM",

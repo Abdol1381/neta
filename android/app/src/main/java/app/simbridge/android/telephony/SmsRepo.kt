@@ -58,7 +58,11 @@ class SmsRepo(private val context: Context, private val contacts: ContactsRepo) 
         if (!Perms.granted(context, Manifest.permission.READ_SMS)) throw BridgeError("permission_denied")
     }
 
-    fun threads(limit: Int): JSONArray {
+    /**
+     * Conversations, newest first. [readMarks] (threadId -> ms) come from the iPhone: this app is not the
+     * default SMS app and cannot mark messages read, so messages up to the mark count as read.
+     */
+    fun threads(limit: Int, readMarks: Map<Long, Long> = emptyMap()): JSONArray {
         requireRead()
         data class T(val id: Long, val address: String, val snippet: String, val date: Long, val out: Boolean, var unread: Int)
         val threads = LinkedHashMap<Long, T>()
@@ -68,7 +72,8 @@ class SmsRepo(private val context: Context, private val contacts: ContactsRepo) 
                 scanned++
                 val tid = c.getLong(1)
                 val type = c.getInt(5)
-                val unread = type == Telephony.Sms.MESSAGE_TYPE_INBOX && c.getInt(6) == 0
+                val unread = type == Telephony.Sms.MESSAGE_TYPE_INBOX && c.getInt(6) == 0 &&
+                    c.getLong(4) > (readMarks[tid] ?: 0L)
                 val t = threads[tid]
                 if (t == null) {
                     if (threads.size >= limit) continue
