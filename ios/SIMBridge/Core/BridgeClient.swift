@@ -77,7 +77,8 @@ final class BridgeClient {
     private var retryDelay: TimeInterval = 1
     private var browser: NWBrowser?
     private var browsingFor: String?
-    private var bonjour: [NWEndpoint] = []
+    /// LAN addresses the Android phone advertises in its Bonjour TXT record ("h").
+    private var bonjour: [String] = []
     private var lastGoodHost: String?
     private var readyWaiters: [(Bool) -> Void] = []
     /// While pairing, failed attempts are retried silently until this moment (covers the
@@ -165,16 +166,17 @@ final class BridgeClient {
         case .pair(let o): hosts = o.hosts; port = o.port
         case .device(let p): hosts = p.hosts; port = p.port
         }
+        for h in bonjour where !hosts.contains(h) { hosts.append(h) }
         if let last = lastGoodHost, let i = hosts.firstIndex(of: last) {
             hosts.remove(at: i)
             hosts.insert(last, at: 0)
         }
-        var out: [NWEndpoint] = []
-        if let nwPort = NWEndpoint.Port(rawValue: UInt16(clamping: port)) {
-            out += hosts.map { NWEndpoint.hostPort(host: NWEndpoint.Host($0), port: nwPort) }
+        // A full ws:// URL is required: with a bare host:port endpoint Network.framework sends an
+        // incomplete WebSocket upgrade request, which servers reject (400 Bad Request).
+        return hosts.compactMap { h in
+            let hostPart = h.contains(":") ? "[\(h)]" : h
+            return URL(string: "ws://\(hostPart):\(port)/").map { NWEndpoint.url($0) }
         }
-        out += bonjour
-        return out
     }
 
     private func attempt() {
@@ -216,7 +218,7 @@ final class BridgeClient {
             racing.removeAll { $0 === c }
             racing.forEach { $0.cancel() }
             racing.removeAll()
-            if case .hostPort(let host, _) = ep { lastGoodHost = "\(host)" }
+            if case .url(let u) = ep, let host = u.host { lastGoodHost = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")) }
             c.stateUpdateHandler = { [weak self, weak c] st in
                 guard let self, let c, c === self.conn else { return }
                 switch st {
@@ -301,9 +303,9 @@ final class BridgeClient {
         let b = NWBrowser(for: .bonjourWithTXTRecord(type: "_simbridge._tcp", domain: nil), using: .tcp)
         b.browseResultsChangedHandler = { [weak self] results, _ in
             guard let self else { return }
-            let found: [NWEndpoint] = results.compactMap { r in
-                if case let .bonjour(txt) = r.metadata, txt["sid"] == serverId { return r.endpoint }
-                return nil
+            let found: [String] = results.flatMap { r -> [String] in
+                guard case let .bonjour(txt) = r.metadata, txt["sid"] == serverId, let h = txt["h"] else { return [] }
+                return h.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             }
             let wasEmpty = self.bonjour.isEmpty
             self.bonjour = found

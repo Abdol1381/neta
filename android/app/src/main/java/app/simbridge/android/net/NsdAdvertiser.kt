@@ -20,6 +20,8 @@ class NsdAdvertiser(context: Context) {
             port = BridgeHub.PORT
             setAttribute("sid", BridgeHub.trust.serverId)
             setAttribute("v", "1")
+            // Current LAN addresses, so the iPhone can reconnect after the phone's IP changes.
+            setAttribute("h", NetUtil.localAddresses().take(4).joinToString(","))
         }
         val l = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(info: NsdServiceInfo) { Log.i(TAG, "registered ${info.serviceName}") }

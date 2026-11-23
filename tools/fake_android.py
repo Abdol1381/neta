@@ -214,17 +214,22 @@ async def handler(ws):
         log("error", repr(e))
 
 
+async def log_request(path, headers):
+    log("http_request", {"path": path, "headers": dict(headers.raw_items())})
+    return None
+
+
 async def main():
     with open(ARGS.payload_out, "w") as f:
         f.write(P.make_pair_url(SID, "Xiaomi Mi A3", ARGS.port, ["127.0.0.1"], PAIR_KEY))
     log("listening", ARGS.port)
-    async with websockets.serve(handler, "0.0.0.0", ARGS.port, max_size=16 * 1024 * 1024):
+    async with websockets.serve(handler, "0.0.0.0", ARGS.port, max_size=16 * 1024 * 1024, process_request=log_request):
         await asyncio.Future()
 
 
 if __name__ == "__main__":
     import logging
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--payload-out", required=True)

@@ -165,6 +165,12 @@ class CallController(private val context: Context, private val contacts: Contact
             }
         }
         am.isSpeakerphoneOn = on
+        return speakerOn()
+    }
+
+    @Suppress("DEPRECATION")
+    fun speakerOn(): Boolean {
+        val am = audio ?: return false
         return if (Build.VERSION.SDK_INT >= 31) {
             am.communicationDevice?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER || am.isSpeakerphoneOn
         } else am.isSpeakerphoneOn
@@ -180,7 +186,7 @@ class CallController(private val context: Context, private val contacts: Contact
         val am = audio
         @Suppress("DEPRECATION")
         return JSONObject().apply {
-            put("speaker", am?.isSpeakerphoneOn ?: false)
+            put("speaker", speakerOn())
             put("muted", am?.isMicrophoneMute ?: false)
         }
     }

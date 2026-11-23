@@ -195,7 +195,12 @@ class BridgeService : Service() {
             "dial" -> { calls.dial(req.optString("number"), req.optInt("subId", -1).takeIf { it >= 0 }); JSONObject() }
             "answer" -> { calls.answer(req.optBoolean("speaker", false)); JSONObject() }
             "reject", "hangup" -> { calls.end(); JSONObject() }
-            "speaker" -> JSONObject().put("on", onMain { calls.setSpeaker(req.optBoolean("on")) })
+            "speaker" -> {
+                onMain { calls.setSpeaker(req.optBoolean("on")) }
+                // Audio routing is applied asynchronously; report the state once it has settled.
+                Thread.sleep(400)
+                JSONObject().put("on", onMain { calls.speakerOn() })
+            }
             "mute" -> JSONObject().put("on", onMain { calls.setMute(req.optBoolean("on")) })
             "calls" -> JSONObject().put("calls", calls.callLog(req.optInt("limit", 100).coerceIn(1, 500)))
             "contacts" -> JSONObject().put("contacts", contacts.all())
