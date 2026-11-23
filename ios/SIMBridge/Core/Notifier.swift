@@ -38,23 +38,25 @@ enum Notifier {
         center.getNotificationSettings { s in DispatchQueue.main.async { done(s.authorizationStatus) } }
     }
 
-    static func postSms(_ m: SmsMessage) {
+    static func postSms(_ m: SmsMessage, simLabel: String? = nil) {
         let c = UNMutableNotificationContent()
         c.title = m.name.isEmpty ? Phone.ltr(m.address) : m.name
         c.body = m.body
         c.sound = .default
         c.categoryIdentifier = catSms
+        if let simLabel { c.subtitle = simLabel }
         c.threadIdentifier = "sms." + Phone.key(m.address)
         c.userInfo = ["kind": "sms", "address": m.address, "subId": m.subId ?? -1]
         add("sms.\(m.address).\(m.date)", c)
     }
 
-    static func postIncomingCall(_ call: CallInfo) {
+    static func postIncomingCall(_ call: CallInfo, simLabel: String? = nil) {
         let c = UNMutableNotificationContent()
         c.title = "تماس ورودی"
         c.body = call.name.isEmpty ? Phone.ltr(call.number.isEmpty ? "شماره نامشخص" : call.number) : "\(call.name)  \(Phone.ltr(call.number))"
         c.sound = .default
         c.categoryIdentifier = catCall
+        if let simLabel { c.subtitle = simLabel }
         c.userInfo = ["kind": "call", "number": call.number]
         if #available(iOS 15.0, *) { c.interruptionLevel = .timeSensitive }
         add(incomingCallId, c)

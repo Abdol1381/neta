@@ -37,7 +37,8 @@ class CallController(private val context: Context, private val contacts: Contact
     private val tm = context.getSystemService(TelephonyManager::class.java)
     private val audio = context.getSystemService(AudioManager::class.java)
 
-    private var lastDialed: Pair<String, Long>? = null
+    private data class Dialed(val number: String, val at: Long, val subId: Int)
+    private var lastDialed: Dialed? = null
     private var sawOffhook = false
     private var endedByUs = false
 
@@ -46,7 +47,9 @@ class CallController(private val context: Context, private val contacts: Contact
             if (i.action != TelephonyManager.ACTION_PHONE_STATE_CHANGED) return
             @Suppress("DEPRECATION")
             val number = i.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
-            onState(i.getStringExtra(TelephonyManager.EXTRA_STATE), number)
+            // Dual SIM: which subscription the call is on (extra name differs between Android versions/OEMs).
+            val subId = i.getIntExtra("android.telephony.extra.SUBSCRIPTION_INDEX", i.getIntExtra("subscription", -1))
+            onState(i.getStringExtra(TelephonyManager.EXTRA_STATE), number, subId)
         }
     }
 
@@ -58,8 +61,8 @@ class CallController(private val context: Context, private val contacts: Contact
         @Suppress("DEPRECATION")
         val st = try { tm?.callState } catch (e: Exception) { null }
         when (st) {
-            TelephonyManager.CALL_STATE_RINGING -> onState(TelephonyManager.EXTRA_STATE_RINGING, null)
-            TelephonyManager.CALL_STATE_OFFHOOK -> onState(TelephonyManager.EXTRA_STATE_OFFHOOK, null)
+            TelephonyManager.CALL_STATE_RINGING -> onState(TelephonyManager.EXTRA_STATE_RINGING, null, -1)
+            TelephonyManager.CALL_STATE_OFFHOOK -> onState(TelephonyManager.EXTRA_STATE_OFFHOOK, null, -1)
         }
     }
 
@@ -68,19 +71,22 @@ class CallController(private val context: Context, private val contacts: Contact
         BridgeHub.call.value = CallInfo.IDLE
     }
 
-    private fun onState(state: String?, number: String?) {
+    private fun onState(state: String?, number: String?, subId: Int) {
         val cur = BridgeHub.call.value
         val now = System.currentTimeMillis()
         when (state) {
             TelephonyManager.EXTRA_STATE_RINGING -> {
                 if (cur.state == "ringing") {
                     // Second broadcast carries the number once READ_CALL_LOG is granted.
-                    if (cur.number.isEmpty() && !number.isNullOrEmpty()) publish(cur.copy(number = number, name = contacts.nameFor(number)), wake = false)
+                    if ((cur.number.isEmpty() && !number.isNullOrEmpty()) || (cur.subId < 0 && subId >= 0)) {
+                        val n = number?.takeIf { it.isNotEmpty() } ?: cur.number
+                        publish(cur.copy(number = n, name = contacts.nameFor(n), subId = if (subId >= 0) subId else cur.subId), wake = false)
+                    }
                     return
                 }
                 sawOffhook = false
                 endedByUs = false
-                publish(CallInfo("ringing", number.orEmpty(), contacts.nameFor(number), "in", now), wake = true)
+                publish(CallInfo("ringing", number.orEmpty(), contacts.nameFor(number), "in", now, subId), wake = true)
             }
             TelephonyManager.EXTRA_STATE_OFFHOOK -> {
                 if (cur.state == "offhook") return
@@ -88,9 +94,10 @@ class CallController(private val context: Context, private val contacts: Contact
                 val next = if (cur.state == "ringing") {
                     cur.copy(state = "offhook", since = now)
                 } else {
-                    val dialed = lastDialed?.takeIf { now - it.second < 30_000 }?.first.orEmpty()
+                    val d = lastDialed?.takeIf { now - it.at < 30_000 }
+                    val dialed = d?.number.orEmpty()
                     endedByUs = false
-                    CallInfo("offhook", dialed, contacts.nameFor(dialed), "out", now)
+                    CallInfo("offhook", dialed, contacts.nameFor(dialed), "out", now, if (subId >= 0) subId else d?.subId ?: -1)
                 }
                 publish(next, wake = false)
             }
@@ -145,7 +152,7 @@ class CallController(private val context: Context, private val contacts: Contact
         if (BridgeHub.call.value.state != "idle") throw BridgeError("busy")
         val extras = Bundle()
         accountFor(subId)?.let { extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it) }
-        lastDialed = number to System.currentTimeMillis()
+        lastDialed = Dialed(number, System.currentTimeMillis(), subId ?: SubscriptionManager.getDefaultVoiceSubscriptionId())
         try {
             telecom?.placeCall(Uri.fromParts("tel", number, null), extras) ?: throw BridgeError("unsupported")
         } catch (e: SecurityException) {

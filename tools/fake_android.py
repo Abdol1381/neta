@@ -108,7 +108,7 @@ def calls():
             for i, (num, nm, ago, d, t) in enumerate(rows)]
 
 
-CALL = {"state": "idle", "number": "", "name": "", "direction": "", "since": 0}
+CALL = {"state": "idle", "number": "", "name": "", "direction": "", "since": 0, "subId": -1}
 
 
 async def handler(ws):
@@ -152,7 +152,7 @@ async def handler(ws):
 
         async def ring_later():
             await asyncio.sleep(2)
-            CALL.update(state="ringing", number="09121234567", name="مریم احمدی", direction="in", since=now_ms())
+            CALL.update(state="ringing", number="09121234567", name="مریم احمدی", direction="in", since=now_ms(), subId=2)
             await send({"t": "call", "call": dict(CALL)})
 
         if os.path.exists(ARGS.call_flag):

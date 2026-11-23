@@ -345,7 +345,7 @@ final class AppModel: ObservableObject {
         call = c
         if c.state == "ringing" && prev.state != "ringing" {
             callScreenMinimized = false
-            Notifier.postIncomingCall(c)
+            Notifier.postIncomingCall(c, simLabel: simLabel(c.subId))
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
         }
         if c.state != "ringing" { Notifier.removeIncomingCall() }
@@ -361,7 +361,7 @@ final class AppModel: ObservableObject {
         let isOpen = isForeground && openThreadId != nil && threads.first(where: { $0.threadId == openThreadId })
             .map { Phone.same($0.address, m.address) } == true
         if Notifier.shouldNotify(m), !isOpen {
-            Notifier.postSms(m)
+            Notifier.postSms(m, simLabel: simLabel(m.subId))
         }
         // Update local caches.
         if let idx = threads.firstIndex(where: { Phone.same($0.address, m.address) }) {
@@ -627,6 +627,18 @@ final class AppModel: ObservableObject {
     }
 
     var sims: [SimInfo] { status?.sims ?? [] }
+
+    /// The SIM a call/SMS is on; falls back to the default voice SIM.
+    func sim(for subId: Int?) -> SimInfo? {
+        if let id = subId, id >= 0, let s = sims.first(where: { $0.subId == id }) { return s }
+        return sims.first { $0.voiceSim } ?? sims.first
+    }
+
+    /// "سیم ۲ · ایرانسل" on dual-SIM phones, nil otherwise.
+    func simLabel(_ subId: Int?) -> String? {
+        guard sims.count > 1, let id = subId, id >= 0, let s = sims.first(where: { $0.subId == id }) else { return nil }
+        return "سیم \(Fmt.persianDigits(String(s.slot + 1))) · \(s.title)"
+    }
 
     func displayName(for number: String) -> String? {
         contacts.first { c in c.numbers.contains { Phone.same($0, number) } }?.name

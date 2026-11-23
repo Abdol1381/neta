@@ -23,10 +23,11 @@ struct CallScreen: View {
                             .padding(12).background(.white.opacity(0.12), in: Circle())
                     }
                     Spacer()
-                    if let sim = model.sims.first(where: { $0.voiceSim }) ?? model.sims.first {
+                    if let sim = model.sim(for: call.subId) {
                         HStack(spacing: 6) {
                             SignalBarsView(level: sim.level, inService: sim.inService, height: 14, barWidth: 4)
-                            Text(sim.title).font(.caption.weight(.semibold))
+                            Text(model.sims.count > 1 ? "سیم \(Fmt.persianDigits(String(sim.slot + 1))) · \(sim.title)" : sim.title)
+                                .font(.caption.weight(.semibold))
                         }
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(.white.opacity(0.12), in: Capsule())

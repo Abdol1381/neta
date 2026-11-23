@@ -55,6 +55,7 @@ struct CallInfo: Codable, Equatable {
     var name: String
     var direction: String  // in / out
     var since: Int64
+    var subId: Int? = nil   // SIM the call is on (dual SIM); nil/-1 when unknown
 
     static let idle = CallInfo(state: "idle", number: "", name: "", direction: "", since: 0)
     var isIdle: Bool { state == "idle" }

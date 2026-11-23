@@ -52,10 +52,11 @@ data class CallInfo(
     val name: String,
     val direction: String,    // in / out / ""
     val since: Long,
+    val subId: Int = -1,      // SIM the call is on, -1 when unknown
 ) {
     fun toJson() = JSONObject().apply {
         put("state", state); put("number", number); put("name", name)
-        put("direction", direction); put("since", since)
+        put("direction", direction); put("since", since); put("subId", subId)
     }
 
     companion object {
