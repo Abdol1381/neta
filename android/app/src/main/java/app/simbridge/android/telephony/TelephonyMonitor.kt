@@ -182,6 +182,7 @@ class TelephonyMonitor(private val context: Context, private val onChange: (Devi
     private inner class LegacyListener : PhoneStateListener {
         private val live: Live
         constructor(l: Live) : super() { live = l }
+        @androidx.annotation.RequiresApi(29)
         constructor(l: Live, e: Executor) : super(e) { live = l }
 
         override fun onSignalStrengthsChanged(signalStrength: SignalStrength) { live.signal = signalStrength; changed() }

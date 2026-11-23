@@ -315,8 +315,10 @@ def run_sms(c):
     back = c.wait_event(lambda e: e.get("t") == "sms" and body in e.get("msg", {}).get("body", ""), 25)
     check("SMS out: message actually went over the radio (looped back)", back is not None, required=False)
 
+    # Multipart goes to another number: looping a 7-part SMS back into the same emulator
+    # can wedge the emulator's modem (seen on API 30), which is not something a real phone does.
     long_body = "طولانی " * 60
-    r = c.request("send_sms", to=own[-1], body=long_body)
+    r = c.request("send_sms", to="5551235", body=long_body)
     check("SMS out: long Persian (multipart) message accepted", r.get("ok"), r)
     ref = r.get("data", {}).get("ref")
     st = c.wait_event(lambda e: e.get("t") == "sms_status" and e.get("ref") == ref, 30)
