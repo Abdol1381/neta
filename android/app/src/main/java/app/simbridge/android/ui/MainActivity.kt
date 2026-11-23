@@ -367,7 +367,7 @@ fun HomeScreen() {
         AlertDialog(
             onDismissRequest = {},
             icon = { Icon(Icons.Outlined.PhoneIphone, null) },
-            title = { Text("اتصال «${req.name}»", textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge) },
+            title = { Text("اتصال «⁨${req.name}⁩»", textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text(
@@ -423,7 +423,7 @@ private fun StatusCard(
     val (title, subtitle) = when {
         !running -> "خاموش" to "برای استفاده از آیفون، سرویس را روشن کنید"
         error != null -> "خطای شبکه" to error
-        connected.isNotEmpty() -> ("متصل به " + connected.joinToString("، ")) to "پیامک، تماس و آنتن روی آیفون در دسترس است"
+        connected.isNotEmpty() -> ("متصل به " + connected.joinToString("، ") { "⁨$it⁩" }) to "پیامک، تماس و آنتن روی آیفون در دسترس است"
         !hasNetwork -> "در انتظار شبکه" to "به Wi-Fi وصل شوید یا هات‌اسپات را روشن کنید"
         else -> "آماده" to "در انتظار اتصال آیفون"
     }

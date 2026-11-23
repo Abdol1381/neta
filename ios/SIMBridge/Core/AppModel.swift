@@ -501,7 +501,7 @@ final class AppModel: ObservableObject {
         default: status = "failed"; outgoing.removeValue(forKey: ref)
         }
         setLocalStatus(threadId: o.threadId, localId: o.localId, status: status)
-        if state == "failed" { toast = "ارسال پیامک به \(Phone.ltr(o.address)) ناموفق بود" }
+        if state == "failed" { toast = "ارسال پیامک به \(Phone.iso(o.address)) ناموفق بود" }
         if state == "sent", let tid = o.threadId {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard let self, self.openThreadId == tid else { return }

@@ -131,4 +131,7 @@ enum Phone {
     }
 
     static func ltr(_ s: String) -> String { "\u{200E}" + s }
+
+    /// Isolates a name/number of unknown direction inside a Persian sentence (FSI … PDI).
+    static func iso(_ s: String) -> String { "\u{2068}" + s + "\u{2069}" }
 }

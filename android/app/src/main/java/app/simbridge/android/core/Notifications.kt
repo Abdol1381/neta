@@ -68,7 +68,7 @@ object PairingNotifier {
         )
         val n = NotificationCompat.Builder(context, Notifications.CH_PAIRING)
             .setSmallIcon(R.drawable.ic_stat_bridge)
-            .setContentTitle("«${req.name}» می‌خواهد متصل شود")
+            .setContentTitle("«⁨${req.name}⁩» می‌خواهد متصل شود")
             .setContentText("کد تأیید: ${req.code} — فقط اگر همین کد روی آیفون نمایش داده شده تأیید کنید.")
             .setStyle(NotificationCompat.BigTextStyle().bigText("کد تأیید: ${req.code}\nفقط اگر همین کد روی آیفون نمایش داده شده تأیید کنید."))
             .setPriority(NotificationCompat.PRIORITY_HIGH)

@@ -82,7 +82,7 @@ struct OngoingCallBar: View {
         } label: {
             HStack {
                 Image(systemName: model.call.state == "ringing" ? "phone.arrow.down.left.fill" : "phone.fill")
-                Text(model.call.state == "ringing" ? "تماس ورودی: \(model.call.display)" : "در تماس: \(model.call.display)")
+                Text(model.call.state == "ringing" ? "تماس ورودی: \(Phone.iso(model.call.display))" : "در تماس: \(Phone.iso(model.call.display))")
                     .lineLimit(1)
                 Spacer()
                 Text("بازگشت").font(.footnote.weight(.semibold))
