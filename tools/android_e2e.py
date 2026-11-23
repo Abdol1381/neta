@@ -7,6 +7,7 @@ outgoing call, rejection of unknown devices and tampered frames, crash detection
 Writes screenshots, report.md and results.json to --out. Exit code 1 if a required check fails.
 """
 import argparse
+import faulthandler
 import json
 import os
 import re
@@ -32,6 +33,11 @@ def check(name, ok, detail="", required=True):
     results.append({"name": name, "ok": bool(ok), "required": required, "detail": str(detail)[:600]})
     mark = "PASS" if ok else ("FAIL" if required else "WARN")
     print(f"[{mark}] {name} {('- ' + str(detail)[:300]) if detail else ''}", flush=True)
+    try:  # keep a partial report even if the run is killed later
+        with open(os.path.join(OUT, "partial.json"), "w") as f:
+            json.dump(results, f, ensure_ascii=False, indent=1)
+    except Exception:
+        pass
     return ok
 
 
@@ -436,6 +442,8 @@ def main():
     args = ap.parse_args()
     OUT = args.out
     os.makedirs(OUT, exist_ok=True)
+    hang_log = open(os.path.join(OUT, "hang_traceback.txt"), "w")
+    faulthandler.dump_traceback_later(25 * 60, exit=True, file=hang_log)
     api = shell("getprop ro.build.version.sdk").strip()
     print("API level", api)
     try:

@@ -119,8 +119,10 @@ async def handler(ws):
         async with send_lock:
             await ws.send(P.seal(key, obj, P.S2C))
 
+    log("connection", str(ws.remote_address))
     try:
         hello = json.loads(await ws.recv())
+        log("hello", hello)
         if hello.get("mode") == "pair":
             key, pairing = PAIR_KEY, True
         elif hello.get("mode") == "dev" and hello.get("id") in DEVICES:
@@ -221,6 +223,8 @@ async def main():
 
 
 if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--payload-out", required=True)

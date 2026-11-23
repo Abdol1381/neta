@@ -36,6 +36,12 @@ enum BridgeError: LocalizedError {
     }
 }
 
+@inline(__always) func dlog(_ s: @autoclosure () -> String) {
+    #if DEBUG
+    NSLog("[SIMBridge] %@", s())
+    #endif
+}
+
 /// Encrypted WebSocket link to the Android agent. Everything runs on the main queue.
 final class BridgeClient {
     enum Mode {
@@ -47,7 +53,7 @@ final class BridgeClient {
 
     private(set) var mode: Mode?
     private(set) var state: ConnState = .idle {
-        didSet { if state != oldValue { onState?(state) } }
+        didSet { if state != oldValue { dlog("state \(state)"); onState?(state) } }
     }
 
     var onState: ((ConnState) -> Void)?
@@ -184,6 +190,7 @@ final class BridgeClient {
             return
         }
         state = .connecting
+        dlog("attempt \(endpoints)")
         for ep in endpoints {
             let c = NWConnection(to: ep, using: Self.parameters())
             racing.append(c)
@@ -201,6 +208,7 @@ final class BridgeClient {
 
     private func raceUpdate(_ c: NWConnection, _ ep: NWEndpoint, _ st: NWConnection.State, _ gen: Int) {
         guard gen == generation else { c.cancel(); return }
+        dlog("race \(ep) -> \(st)")
         switch st {
         case .ready:
             guard conn == nil else { c.cancel(); return }
@@ -317,7 +325,7 @@ final class BridgeClient {
     private func receive(_ c: NWConnection) {
         c.receiveMessage { [weak self, weak c] data, context, _, error in
             guard let self, let c, c === self.conn else { return }
-            if error != nil { self.connectionLost(); return }
+            if let error { dlog("receive error \(error)"); self.connectionLost(); return }
             if let data, let meta = context?.protocolMetadata(definition: NWProtocolWebSocket.definition) as? NWProtocolWebSocket.Metadata {
                 switch meta.opcode {
                 case .binary: self.handleBinary(data)
@@ -372,9 +380,12 @@ final class BridgeClient {
     }
 
     private func handleBinary(_ data: Data) {
-        guard let key, let plain = WireCrypto.open(data, key: key),
+        guard let key else { return }
+        guard let plain = WireCrypto.open(data, key: key) else { dlog("decrypt failed (\(data.count) bytes)"); return }
+        guard
               let obj = (try? JSONSerialization.jsonObject(with: plain)) as? [String: Any],
               let t = obj["t"] as? String else { return }
+        dlog("recv \(t)")
 
         switch t {
         case "challenge":

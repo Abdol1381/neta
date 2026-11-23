@@ -40,7 +40,11 @@ trap 'kill $SERVER 2>/dev/null' EXIT
 for i in $(seq 1 20); do [ -s "$PAY" ] && break; sleep 0.5; done
 
 shot() { sleep "$2"; xcrun simctl io "$UDID" screenshot "$OUT/$1.png" >/dev/null 2>&1; sips -Z 1300 "$OUT/$1.png" >/dev/null 2>&1; }
-launch() { xcrun simctl terminate "$UDID" $BUNDLE 2>/dev/null; sleep 0.5; xcrun simctl launch "$UDID" $BUNDLE -SIMBridgeTestMode YES "$@" >/dev/null; }
+N=0
+launch() {
+  xcrun simctl terminate "$UDID" $BUNDLE 2>/dev/null; sleep 0.5; N=$((N+1))
+  xcrun simctl launch --stdout="$OUT/app_$N.out.txt" --stderr="$OUT/app_$N.err.txt" "$UDID" $BUNDLE -SIMBridgeTestMode YES "$@" >/dev/null
+}
 crashed() { ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i simbridge; }
 
 run_round() {  # $1 = suffix
