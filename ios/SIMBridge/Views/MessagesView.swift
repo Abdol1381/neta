@@ -178,14 +178,14 @@ struct Bubble: View {
             VStack(alignment: message.out ? .trailing : .leading, spacing: 3) {
                 Text(message.body)
                     .font(.body)
-                    .foregroundStyle(message.out ? .white : .primary)
+                    .foregroundStyle(message.out ? Color.white : Color.primary)
                     .textSelection(.enabled)
                 HStack(spacing: 4) {
                     Text(Fmt.clock(message.date))
                     if message.out { statusIcon }
                 }
                 .font(.caption2)
-                .foregroundStyle(message.out ? .white.opacity(0.8) : .secondary)
+                .foregroundStyle(message.out ? Color.white.opacity(0.8) : Color.secondary)
             }
             .padding(.horizontal, 13)
             .padding(.vertical, 8)

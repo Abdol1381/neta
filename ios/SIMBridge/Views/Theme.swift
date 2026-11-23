@@ -180,10 +180,10 @@ enum Fmt {
     }
 
     static func duration(_ seconds: Int64) -> String {
-        let s = max(0, seconds)
+        let s = Int(max(0, seconds))
         let str = s >= 3600
-            ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
-            : String(format: "%02d:%02d", s / 60, s % 60)
+            ? String(format: "%ld:%02ld:%02ld", s / 3600, (s % 3600) / 60, s % 60)
+            : String(format: "%02ld:%02ld", s / 60, s % 60)
         return persianDigits(str)
     }
 

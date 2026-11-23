@@ -32,7 +32,9 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
         case .authorized: configure()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { ok in
-                DispatchQueue.main.async { ok ? self.configure() : self.onDenied?() }
+                DispatchQueue.main.async {
+                    if ok { self.configure() } else { self.onDenied?() }
+                }
             }
         default:
             DispatchQueue.main.async { self.onDenied?() }

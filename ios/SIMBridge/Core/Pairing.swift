@@ -31,7 +31,8 @@ struct PairOffer: Equatable {
         guard let sid = q["sid"], !sid.isEmpty,
               let k = q["k"], let key = WireCrypto.base64URLDecode(k), key.count == 32 else { return nil }
         serverId = sid
-        name = (q["n"]?.isEmpty == false ? q["n"]! : "Android")
+        let n = (q["n"] ?? "").replacingOccurrences(of: "+", with: " ")
+        name = n.isEmpty ? "Android" : n
         port = Int(q["p"] ?? "") ?? 8765
         hosts = (q["h"] ?? "").split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         self.key = key
