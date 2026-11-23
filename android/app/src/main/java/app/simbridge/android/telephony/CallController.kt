@@ -24,6 +24,8 @@ import app.simbridge.android.core.CallInfo
 import app.simbridge.android.net.BridgeError
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Call control without replacing the user's dialer:
@@ -143,6 +145,38 @@ class CallController(private val context: Context, private val contacts: Contact
         @Suppress("DEPRECATION")
         val ok = telecom?.endCall() ?: false
         if (!ok) { endedByUs = false; throw BridgeError("no_call") }
+    }
+
+    /**
+     * Runs a USSD code (e.g. *140#) on the chosen SIM and returns the operator's reply.
+     * Blocks the calling worker thread up to 40 s.
+     */
+    fun ussd(raw: String, subId: Int?): String {
+        need(Manifest.permission.CALL_PHONE)
+        val code = raw.filter { it.isDigit() || it == '*' || it == '#' }
+        if (code.length < 3 || !code.endsWith("#") || !(code.startsWith("*") || code.startsWith("#"))) throw BridgeError("bad_request")
+        if (BridgeHub.call.value.state != "idle") throw BridgeError("busy")
+        val base = tm ?: throw BridgeError("unsupported")
+        val id = subId?.takeIf { it >= 0 } ?: SubscriptionManager.getDefaultVoiceSubscriptionId()
+        val t = if (id >= 0) try { base.createForSubscriptionId(id) } catch (e: Exception) { base } else base
+        val latch = CountDownLatch(1)
+        var reply: String? = null
+        var failure: Int? = null
+        val cb = object : TelephonyManager.UssdResponseCallback() {
+            override fun onReceiveUssdResponse(m: TelephonyManager, request: String, response: CharSequence) {
+                reply = response.toString(); latch.countDown()
+            }
+            override fun onReceiveUssdResponseFailed(m: TelephonyManager, request: String, failureCode: Int) {
+                failure = failureCode; latch.countDown()
+            }
+        }
+        try {
+            t.sendUssdRequest(code, cb, main)
+        } catch (e: SecurityException) {
+            throw BridgeError("permission_denied")
+        }
+        if (!latch.await(40, TimeUnit.SECONDS)) throw BridgeError("timeout")
+        return reply ?: throw BridgeError("ussd_failed")
     }
 
     fun dial(raw: String, subId: Int?) {

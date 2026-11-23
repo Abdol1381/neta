@@ -209,7 +209,7 @@ struct SimRow: View {
         var parts: [String] = []
         if multi { parts.append("سیم \(Fmt.persianDigits(String(sim.slot + 1)))") }
         parts.append(sim.serviceText)
-        if let dbm = sim.dbm { parts.append(Phone.ltr("\(dbm) dBm") + "\u{200F}") }
+        if let dbm = sim.dbm { parts.append("\u{2066}\(dbm) dBm\u{2069}") }  // LRI…PDI keeps "-81 dBm" intact
         if multi {
             let roles = [sim.smsSim ? "پیامک" : nil, sim.voiceSim ? "تماس" : nil].compactMap { $0 }
             if !roles.isEmpty { parts.append("پیش‌فرض " + roles.joined(separator: " و ")) }

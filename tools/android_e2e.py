@@ -406,6 +406,12 @@ def run_calls(c):
     check("call out: hang up accepted", r.get("ok"), r)
     e = c.wait_event(call_state("idle"), 15)
     check("call out: idle", e is not None, e)
+    r = c.request("ussd", timeout=50, code="*140#")
+    check("USSD: handled without error (reply or operator failure)",
+          r.get("ok") or r.get("err") in ("ussd_failed", "timeout"), r)
+    check("USSD: operator reply text", r.get("ok") and r.get("data", {}).get("text"), r, required=False)
+    r = c.request("ussd", code="140")
+    check("USSD: invalid code rejected", not r.get("ok") and r.get("err") == "bad_request", r)
     r = c.request("hangup")
     check("hang up with no call -> no_call", not r.get("ok") and r.get("err") == "no_call", r)
 

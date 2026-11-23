@@ -30,6 +30,8 @@ enum BridgeError: LocalizedError {
             case "busy": return "یک تماس دیگر در جریان است"
             case "unsupported": return "این قابلیت روی این گوشی اندروید پشتیبانی نمی‌شود"
             case "bad_request": return "اطلاعات واردشده معتبر نیست"
+            case "ussd_failed": return "اپراتور به این کد پاسخ نداد یا کد نامعتبر است"
+            case "timeout": return "پاسخی از اپراتور نرسید"
             default: return "خطا در گوشی اندروید (\(code))"
             }
         }

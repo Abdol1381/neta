@@ -516,7 +516,37 @@ final class AppModel: ObservableObject {
         messages[tid] = list
     }
 
+    // MARK: - USSD (*140# …)
+
+    enum UssdState: Equatable {
+        case running(String)
+        case reply(String, String)
+        case failed(String, String)
+    }
+
+    @Published var ussd: UssdState?
+
+    static func isUssd(_ s: String) -> Bool {
+        let n = s.filter { !$0.isWhitespace }
+        return n.count >= 3 && n.hasSuffix("#") && (n.hasPrefix("*") || n.hasPrefix("#"))
+    }
+
+    func runUssd(_ code: String, subId: Int?) {
+        let c = code.filter { $0.isNumber || $0 == "*" || $0 == "#" }
+        ussd = .running(c)
+        var params: [String: Any] = ["code": c]
+        if let subId { params["subId"] = subId }
+        client.request("ussd", params, timeout: 45) { [weak self] r in
+            guard let self else { return }
+            switch r {
+            case .success(let d): self.ussd = .reply(c, d["text"] as? String ?? "")
+            case .failure(let e): self.ussd = .failed(c, (e as? LocalizedError)?.errorDescription ?? e.localizedDescription)
+            }
+        }
+    }
+
     func dial(_ number: String, subId: Int? = nil) {
+        if Self.isUssd(number) { runUssd(number, subId: subId); return }
         let n = number.filter { $0.isNumber || $0 == "+" || $0 == "*" || $0 == "#" }
         guard !n.isEmpty else { return }
         var params: [String: Any] = ["number": n]

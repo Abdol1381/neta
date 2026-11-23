@@ -127,6 +127,11 @@ struct KeypadView: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
+        .sheet(isPresented: Binding(get: { model.ussd != nil }, set: { if !$0 { model.ussd = nil } })) {
+            UssdSheet().environmentObject(model)
+                .presentationDetents([.medium])
+                .environment(\.layoutDirection, .rightToLeft)
+        }
     }
 
     private var canCall: Bool { model.conn.isReady && number.contains(where: { $0.isNumber }) && model.call.isIdle }
@@ -188,5 +193,57 @@ struct RecentsView: View {
         default: kind = "تماس"
         }
         return c.duration > 0 ? "\(kind) · \(Fmt.duration(c.duration))" : kind
+    }
+}
+
+/// Operator reply to a USSD code such as *140#.
+struct UssdSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Capsule().fill(Color.secondary.opacity(0.3)).frame(width: 36, height: 5).padding(.top, 8)
+            switch model.ussd {
+            case .running(let code):
+                header(code)
+                ProgressView().controlSize(.large).padding(.top, 20)
+                Text("در انتظار پاسخ اپراتور…").foregroundStyle(.secondary)
+            case .reply(let code, let text):
+                header(code)
+                ScrollView {
+                    Text(text)
+                        .font(.body)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .card()
+            case .failed(let code, let msg):
+                header(code)
+                Label(msg, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Theme.fair)
+                    .card()
+            case .none:
+                EmptyView()
+            }
+            Spacer(minLength: 0)
+            Button("بستن") { dismiss() }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+        .background(Theme.background.ignoresSafeArea())
+    }
+
+    private func header(_ code: String) -> some View {
+        VStack(spacing: 4) {
+            Text("پاسخ اپراتور").font(.headline)
+            Text(Phone.ltr(code)).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+        }
     }
 }

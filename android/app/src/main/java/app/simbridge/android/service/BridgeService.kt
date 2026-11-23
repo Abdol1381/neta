@@ -203,6 +203,7 @@ class BridgeService : Service() {
             }
             "mute" -> JSONObject().put("on", onMain { calls.setMute(req.optBoolean("on")) })
             "calls" -> JSONObject().put("calls", calls.callLog(req.optInt("limit", 100).coerceIn(1, 500)))
+            "ussd" -> JSONObject().put("text", calls.ussd(req.optString("code"), req.optInt("subId", -1).takeIf { it >= 0 }))
             "contacts" -> JSONObject().put("contacts", contacts.all())
             else -> throw BridgeError("unknown_request")
         }

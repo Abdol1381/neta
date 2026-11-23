@@ -203,6 +203,9 @@ async def handler(ws):
             elif t in ("reject", "hangup"):
                 CALL.update(state="idle", number="", name="", direction="", since=0)
                 asyncio.create_task(send({"t": "call", "call": dict(CALL)}))
+            elif t == "ussd":
+                await asyncio.sleep(1)
+                data = {"text": "مانده حساب شما: ۱۲۵,۴۰۰ ریال" + chr(10) + "اعتبار تا ۱۴۰۵/۰۹/۳۰"}
             elif t in ("speaker", "mute"):
                 data = {"on": bool(req.get("on"))}
             else:
