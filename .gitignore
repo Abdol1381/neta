@@ -1,0 +1,8 @@
+# iOS
+ios/SIMBridge.xcodeproj/
+ios/build/
+ios/Payload/
+*.ipa
+DerivedData/
+.DS_Store
+xcuserdata/

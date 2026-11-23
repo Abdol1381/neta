@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- SIM card outline -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M42,30h18l10,10v34a4,4 0 0 1 -4,4H42a4,4 0 0 1 -4,-4V34a4,4 0 0 1 4,-4z" />
+    <path android:fillColor="#2236C9"
+        android:pathData="M45,52h18a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2H45a2,2 0 0 1 -2,-2V54a2,2 0 0 1 2,-2z" />
+    <!-- signal bars -->
+    <path android:fillColor="#FFFFFF" android:pathData="M46,64h3v3h-3z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M51,61h3v6h-3z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M56,58h3v9h-3z" />
+    <path android:fillColor="#9FB0FF" android:pathData="M61,55h2v12h-2z" />
+</vector>

@@ -1,0 +1,341 @@
+import SwiftUI
+
+struct ThreadsView: View {
+    @EnvironmentObject var model: AppModel
+    @State private var search = ""
+    @State private var showCompose = false
+
+    private var filtered: [SmsThread] {
+        let q = search.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return model.threads }
+        return model.threads.filter { $0.title.localizedCaseInsensitiveContains(q) || $0.address.contains(q) || $0.snippet.localizedCaseInsensitiveContains(q) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if model.threads.isEmpty {
+                    EmptyState(
+                        icon: model.conn.isReady ? "message" : "wifi.slash",
+                        title: model.conn.isReady ? (model.loadingThreads ? "در حال دریافت…" : "پیامی نیست") : "به گوشی اندروید وصل نیست",
+                        subtitle: model.conn.isReady ? "پیامک‌های سیم‌کارت اندروید اینجا نمایش داده می‌شوند." : "پس از اتصال، پیام‌ها اینجا نمایش داده می‌شوند."
+                    )
+                } else {
+                    List(filtered) { t in
+                        NavigationLink(value: t) { ThreadRow(thread: t) }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("پیام‌ها")
+            .navigationDestination(for: SmsThread.self) { t in ConversationView(thread: t) }
+            .searchable(text: $search, prompt: "جستجو")
+            .refreshable { await withCheckedContinuation { c in model.loadThreads { c.resume() } } }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showCompose = true } label: { Image(systemName: "square.and.pencil") }
+                        .disabled(!model.conn.isReady)
+                }
+            }
+            .sheet(isPresented: $showCompose) { ComposeView().environmentObject(model) }
+        }
+    }
+}
+
+extension SmsThread: Hashable {
+    func hash(into hasher: inout Hasher) { hasher.combine(threadId) }
+}
+
+struct ThreadRow: View {
+    var thread: SmsThread
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Avatar(name: thread.name.isEmpty ? thread.address : thread.name, size: 48)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(thread.name.isEmpty ? Phone.ltr(thread.address) : thread.name)
+                        .font(.body.weight(thread.unread > 0 ? .bold : .semibold))
+                        .lineLimit(1)
+                    Spacer()
+                    Text(Fmt.short(thread.date)).font(.caption).foregroundStyle(thread.unread > 0 ? Theme.indigo : .secondary)
+                }
+                HStack(alignment: .top) {
+                    Text((thread.out ? "شما: " : "") + thread.snippet)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer()
+                    if thread.unread > 0 {
+                        Text("\(thread.unread)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(Theme.indigo, in: Capsule())
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct ConversationView: View {
+    @EnvironmentObject var model: AppModel
+    var thread: SmsThread
+    @State private var text = ""
+    @State private var subId: Int?
+    @State private var loading = true
+    @FocusState private var focused: Bool
+
+    private var list: [SmsMessage] { model.messages[thread.threadId] ?? [] }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 6) {
+                        if loading && list.isEmpty { ProgressView().padding(.top, 40) }
+                        ForEach(Array(list.enumerated()), id: \.element.id) { i, m in
+                            if i == 0 || !sameDay(list[i - 1].date, m.date) {
+                                Text(Fmt.dayHeader(m.date))
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.vertical, 8)
+                            }
+                            Bubble(message: m).id(m.id)
+                        }
+                        Color.clear.frame(height: 4).id("bottom")
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+                .onChange(of: list.count) { _ in
+                    withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
+                .onChange(of: focused) { f in
+                    if f { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } } }
+                }
+            }
+            inputBar
+        }
+        .background(Theme.background.ignoresSafeArea())
+        .navigationTitle(thread.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { model.dial(thread.address, subId: subId) } label: { Image(systemName: "phone.fill") }
+                    .disabled(!model.conn.isReady)
+            }
+        }
+        .onAppear {
+            model.markThreadOpened(thread.threadId)
+            model.loadMessages(threadId: thread.threadId) { loading = false }
+            if subId == nil { subId = list.last(where: { ($0.subId ?? -1) >= 0 })?.subId }
+        }
+        .onDisappear { if model.openThreadId == thread.threadId { model.markThreadOpened(nil) } }
+    }
+
+    private var inputBar: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            if model.sims.count > 1 { SimPicker(subId: $subId) }
+            TextField("پیامک", text: $text, axis: .vertical)
+                .lineLimit(1...6)
+                .focused($focused)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            Button {
+                let body = text
+                text = ""
+                model.sendSms(to: thread.address, body: body, subId: subId, threadId: thread.threadId)
+            } label: {
+                Image(systemName: "arrow.up.circle.fill").font(.system(size: 34))
+                    .foregroundStyle(canSend ? Theme.indigo : Color.gray.opacity(0.4))
+            }
+            .disabled(!canSend)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.bar)
+    }
+
+    private var canSend: Bool { model.conn.isReady && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    private func sameDay(_ a: Int64, _ b: Int64) -> Bool {
+        Fmt.persianCalendar.isDate(Fmt.date(a), inSameDayAs: Fmt.date(b))
+    }
+}
+
+struct Bubble: View {
+    var message: SmsMessage
+
+    var body: some View {
+        HStack {
+            if message.out { Spacer(minLength: 50) }
+            VStack(alignment: message.out ? .trailing : .leading, spacing: 3) {
+                Text(message.body)
+                    .font(.body)
+                    .foregroundStyle(message.out ? .white : .primary)
+                    .textSelection(.enabled)
+                HStack(spacing: 4) {
+                    Text(Fmt.clock(message.date))
+                    if message.out { statusIcon }
+                }
+                .font(.caption2)
+                .foregroundStyle(message.out ? .white.opacity(0.8) : .secondary)
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 8)
+            .background(
+                message.out ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Theme.card),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+            if !message.out { Spacer(minLength: 50) }
+        }
+    }
+
+    @ViewBuilder private var statusIcon: some View {
+        switch message.status {
+        case "sending": Image(systemName: "clock")
+        case "failed": Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.poor)
+        case "delivered": Image(systemName: "checkmark.circle.fill")
+        default: Image(systemName: "checkmark")
+        }
+    }
+}
+
+struct SimPicker: View {
+    @EnvironmentObject var model: AppModel
+    @Binding var subId: Int?
+
+    var body: some View {
+        Menu {
+            ForEach(model.sims) { s in
+                Button {
+                    subId = s.subId
+                } label: {
+                    Label("سیم \(s.slot + 1) — \(s.title)", systemImage: subId == s.subId ? "checkmark" : "simcard")
+                }
+            }
+        } label: {
+            let current = model.sims.first { $0.subId == subId } ?? model.sims.first { $0.smsSim } ?? model.sims.first
+            HStack(spacing: 3) {
+                Image(systemName: "simcard.fill")
+                Text("\((current?.slot ?? 0) + 1)").font(.caption.weight(.bold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .background(Theme.card, in: Capsule())
+        }
+        .onAppear {
+            if subId == nil { subId = (model.sims.first { $0.smsSim } ?? model.sims.first)?.subId }
+        }
+    }
+}
+
+struct ComposeView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    var initialNumber: String = ""
+    @State private var to = ""
+    @State private var text = ""
+    @State private var subId: Int?
+    @State private var sending = false
+
+    private struct Suggestion: Identifiable {
+        let name: String
+        let number: String
+        var id: String { number }
+    }
+
+    private var suggestions: [Suggestion] {
+        let q = to.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return [] }
+        var out: [Suggestion] = []
+        for c in model.contacts where c.name.localizedCaseInsensitiveContains(q) || c.numbers.contains(where: { $0.contains(q) }) {
+            for n in c.numbers where !out.contains(where: { $0.number == n }) { out.append(Suggestion(name: c.name, number: n)) }
+            if out.count > 8 { break }
+        }
+        return out
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("شماره یا نام مخاطب", text: $to)
+                        .keyboardType(.default)
+                        .textContentType(.telephoneNumber)
+                    if !suggestions.isEmpty && !to.allSatisfy({ $0.isNumber || $0 == "+" }) {
+                        ForEach(suggestions) { s in
+                            Button {
+                                to = s.number
+                            } label: {
+                                HStack {
+                                    Text(s.name).foregroundStyle(.primary)
+                                    Spacer()
+                                    Text(Phone.ltr(s.number)).foregroundStyle(.secondary).font(.caption)
+                                }
+                            }
+                        }
+                    }
+                }
+                Section {
+                    TextField("متن پیامک", text: $text, axis: .vertical).lineLimit(4...10)
+                    if model.sims.count > 1 {
+                        Picker("سیم‌کارت", selection: Binding(get: { subId ?? defaultSub }, set: { subId = $0 })) {
+                            ForEach(model.sims) { s in Text("سیم \(s.slot + 1) — \(s.title)").tag(Optional(s.subId)) }
+                        }
+                    }
+                } footer: {
+                    Text("پیامک از سیم‌کارت گوشی اندروید ارسال می‌شود و هزینه آن طبق تعرفه همان سیم‌کارت است.")
+                }
+            }
+            .navigationTitle("پیام جدید")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("انصراف") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if sending { ProgressView() } else {
+                        Button("ارسال") { send() }.disabled(!canSend)
+                    }
+                }
+            }
+            .onAppear { if to.isEmpty { to = initialNumber } }
+        }
+    }
+
+    private var defaultSub: Int? { (model.sims.first { $0.smsSim } ?? model.sims.first)?.subId }
+
+    private var canSend: Bool {
+        model.conn.isReady && to.contains(where: { $0.isNumber }) && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func send() {
+        sending = true
+        let tid = model.threads.first { Phone.same($0.address, to) }?.threadId
+        model.sendSms(to: to, body: text, subId: subId ?? defaultSub, threadId: tid) { ok in
+            sending = false
+            if ok { dismiss() }
+        }
+    }
+}
+
+struct EmptyState: View {
+    var icon: String
+    var title: String
+    var subtitle: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon).font(.system(size: 44)).foregroundStyle(.secondary)
+            Text(title).font(.headline)
+            Text(subtitle).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        }
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}

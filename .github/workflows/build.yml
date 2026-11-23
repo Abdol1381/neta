@@ -1,0 +1,121 @@
+name: Build apps
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    name: iOS (unsigned IPA)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project SIMBridge.xcodeproj -target SIMBridge \
+            -configuration Release -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | grep -E "error:|warning: .*deprecated|\*\* BUILD" || true
+          if ! grep -q "\*\* BUILD SUCCEEDED \*\*" build.log; then
+            grep -E "error:" build.log | sort -u | head -60 | while IFS= read -r line; do echo "::error::${line}"; done
+            exit 1
+          fi
+
+      - name: Package IPA
+        working-directory: ios
+        run: |
+          APP="build/Release-iphoneos/SIMBridge.app"
+          test -d "$APP"
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          zip -qry SIMBridge-unsigned.ipa Payload
+          ls -la SIMBridge-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SIMBridge-iOS
+          path: ios/SIMBridge-unsigned.ipa
+
+  android:
+    name: Android (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode signing key (optional secrets)
+        env:
+          KEYSTORE_B64: ${{ secrets.SIMBRIDGE_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "SIMBRIDGE_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build APK
+        working-directory: android
+        env:
+          SIMBRIDGE_KEYSTORE_PASSWORD: ${{ secrets.SIMBRIDGE_KEYSTORE_PASSWORD }}
+          SIMBRIDGE_KEY_ALIAS: ${{ secrets.SIMBRIDGE_KEY_ALIAS }}
+          SIMBRIDGE_KEY_PASSWORD: ${{ secrets.SIMBRIDGE_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -Dfile.encoding=UTF-8" assembleRelease 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            grep -E "^e: |error:" build.log | sort -u | head -60 | while IFS= read -r line; do echo "::error::${line}"; done
+            exit $status
+          fi
+          cp app/build/outputs/apk/release/app-release.apk SIMBridge-android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SIMBridge-Android
+          path: android/SIMBridge-android.apk
+
+  release:
+    name: Publish release
+    needs: [ios, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: SIMBridge build ${{ github.run_number }}
+          make_latest: true
+          body: |
+            - **SIMBridge-unsigned.ipa** — iPhone app. Install with Sideloadly / AltStore / TrollStore (they sign it with your Apple ID).
+            - **SIMBridge-android.apk** — Android agent for the phone that holds the SIM card.
+          files: |
+            dist/SIMBridge-unsigned.ipa
+            dist/SIMBridge-android.apk
