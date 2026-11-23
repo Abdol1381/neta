@@ -6,3 +6,5 @@ ios/Payload/
 DerivedData/
 .DS_Store
 xcuserdata/
+/SIMBridge-android.apk
+android/local-build.log
