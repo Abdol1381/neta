@@ -51,6 +51,7 @@ class BuiltInAdb(private val context: Context) {
 
     private fun setState(s: String) {
         if (state.value != s) {
+            app.simbridge.android.core.BridgeHub.log("wireless debugging link: $s${if (s == "offline" && lastError.isNotEmpty()) " — $lastError" else ""}")
             state.value = s
             onStateChanged?.invoke()
         }

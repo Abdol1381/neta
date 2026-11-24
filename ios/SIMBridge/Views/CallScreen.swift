@@ -101,6 +101,7 @@ struct CallScreen: View {
     }
 
     private var statusLine: String {
+        if !model.conn.isReady { return "reconnecting…" }
         switch call.state {
         case "ringing": return "incoming call…"
         case "offhook":

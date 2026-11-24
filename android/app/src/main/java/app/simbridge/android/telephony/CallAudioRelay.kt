@@ -33,6 +33,11 @@ class CallAudioRelay(private val context: Context) {
 
     val running: Boolean get() = process != null
 
+    /** A PIN / pattern / password lock: on Android 11 call audio can't start while locked. */
+    val lockSecure: Boolean
+        get() = Build.VERSION.SDK_INT == 30 &&
+            (context.getSystemService(android.app.KeyguardManager::class.java)?.isDeviceSecure == true)
+
     var onStateChanged: (() -> Unit)? = null
 
     private val binderListener = Shizuku.OnBinderReceivedListener { refresh() }
@@ -134,6 +139,7 @@ class CallAudioRelay(private val context: Context) {
             if (state.value != "ready") throw IllegalStateException(state.value)
             installServer()
             val id = "%08x".format(Random.nextInt(0x10000000, 0x7fffffff))
+            app.simbridge.android.core.BridgeHub.log("call audio start (adb=${adb.state.value}, lockSecure=$lockSecure)")
             val p = exec(shellScript(id, context.applicationInfo.sourceDir))
             process = p
             scid = id
@@ -142,7 +148,8 @@ class CallAudioRelay(private val context: Context) {
     }
 
     private fun pump(p: ShellProc, onPcm: (ByteArray) -> Unit, onEnd: (String?) -> Unit) {
-        val mixer = Downmixer(onPcm)
+        var bytes = 0L
+        val mixer = Downmixer { chunk -> bytes += chunk.size; onPcm(chunk) }
         val buf = ByteArray(7680)
         var reason: String? = "ended"
         try {
@@ -160,6 +167,7 @@ class CallAudioRelay(private val context: Context) {
             requested
         }
         p.destroy()
+        app.simbridge.android.core.BridgeHub.log("call audio ended: ${if (stoppedOnRequest) "stopped" else reason} after ${bytes / 640 / 50}s")
         onEnd(if (stoppedOnRequest) null else reason)
     }
 
@@ -221,6 +229,9 @@ class CallAudioRelay(private val context: Context) {
 
         /** The shell script that runs as the shell user. Also used verbatim by the emulator test. */
         fun shellScript(id: String, apkPath: String): String = buildString {
+            // Android 11 only captures audio when the screen is unlocked at start: wake it and dismiss a
+            // swipe / none lock screen (a PIN/pattern lock cannot be dismissed — the app warns about it).
+            append("input keyevent KEYCODE_WAKEUP 2>/dev/null; wm dismiss-keyguard 2>/dev/null; sleep 0.7\n")
             append("CLASSPATH=$JAR app_process / com.genymobile.scrcpy.Server $SCRCPY_VERSION scid=$id ")
             append("log_level=warn video=false audio=true control=false audio_source=voice-call-downlink ")
             append("audio_codec=raw tunnel_forward=true raw_stream=true cleanup=false ")

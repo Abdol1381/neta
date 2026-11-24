@@ -49,6 +49,8 @@ struct PhoneStatus: Codable, Equatable {
     var perms: [String: Bool]
     /// Developer-mode call audio on Android: ready / no_permission / no_shizuku / unsupported
     var devAudio: String?
+    /// Android 11 with a PIN/pattern lock: call audio can't start while the phone is locked.
+    var lockSecure: Bool?
 }
 
 struct CallInfo: Codable, Equatable {

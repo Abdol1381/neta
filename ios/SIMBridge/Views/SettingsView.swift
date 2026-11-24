@@ -66,6 +66,14 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink { DiagnosticsView() } label: {
+                        SettingsRow(icon: "stethoscope", color: .gray, title: "Diagnostics")
+                    }
+                } footer: {
+                    Text("If calls, audio or the connection misbehave, share this report.")
+                }
+
+                Section {
                     Button(role: .destructive) { confirmUnpair = true } label: {
                         Text("Unpair Android Phone")
                     }
@@ -218,6 +226,12 @@ struct HearCallsView: View {
                 }
                 Toggle("Play Automatically During Calls", isOn: $model.autoListen)
                     .disabled(!model.canListen)
+                if model.status?.lockSecure == true {
+                    Label("The Android phone has a PIN/pattern screen lock. On Android 11, call audio can only start while it's unlocked — set its screen lock to None or Swipe (Settings → Security → Screen lock).",
+                          systemImage: "lock.fill")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.fair)
+                }
             } footer: {
                 Text("After a one-time setup in the Android app (“شنیدن تماس روی آیفون” → “راه‌اندازی”, no root needed), the other person's voice plays on this iPhone or AirPods, even when locked. You still speak into the Android phone or a headset paired with it — Android doesn't let the iPhone's voice into a SIM call. For full two-way voice, use an Internet Phone Line.")
             }
@@ -291,6 +305,58 @@ struct PhoneStatusView: View {
             Text(title)
             Spacer()
             Text(value).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+/// Settings → Diagnostics: recent events from this iPhone and from the Android phone.
+struct DiagnosticsView: View {
+    @EnvironmentObject var model: AppModel
+    @State private var androidLog = ""
+    @State private var loading = false
+
+    private var report: String {
+        var r = "SIMBridge diagnostics — \(Date())\n"
+        r += "iOS \(UIDevice.current.systemVersion) · link \(model.conn) · keepConnected \(model.keepConnected) · keeper \(model.keeper.isRunning)\n"
+        r += "devAudio \(model.status?.devAudio ?? "-") · lockSecure \(model.status?.lockSecure ?? false) · sip \(model.sipState)\n\n"
+        r += "== iPhone ==\n" + DiagLog.text + "\n\n== Android ==\n" + (androidLog.isEmpty ? "(not loaded)" : androidLog)
+        return r
+    }
+
+    var body: some View {
+        List {
+            Section {
+                ShareLink(item: report) { Label("Share Report", systemImage: "square.and.arrow.up") }
+                Button { UIPasteboard.general.string = report } label: { Label("Copy Report", systemImage: "doc.on.doc") }
+                Button { loadAndroid() } label: {
+                    HStack {
+                        Label("Reload Android Log", systemImage: "arrow.clockwise")
+                        if loading { Spacer(); ProgressView() }
+                    }
+                }
+            }
+            Section("iPhone") {
+                Text(DiagLog.text.isEmpty ? "No events yet" : DiagLog.text)
+                    .font(.system(.caption2, design: .monospaced))
+                    .textSelection(.enabled)
+            }
+            Section("Android") {
+                Text(androidLog.isEmpty ? (model.conn.isReady ? "Loading…" : "Not connected") : androidLog)
+                    .font(.system(.caption2, design: .monospaced))
+                    .textSelection(.enabled)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Diagnostics")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { loadAndroid() }
+    }
+
+    private func loadAndroid() {
+        loading = true
+        model.client.request("diag", timeout: 10) { r in
+            loading = false
+            if case .success(let d) = r { androidLog = d["text"] as? String ?? "" }
         }
     }
 }

@@ -131,6 +131,7 @@ final class AppModel: ObservableObject {
         ble.onConnectedChange = { [weak self] c in self?.bleConnected = c }
         iphoneContacts.onChange = { [weak self] in self?.contactsChanged() }
         setupCallKit()
+        startWatchdog()
         keeper.mayTouchSession = { [weak self] in
             guard let self else { return true }
             return !self.listening && !self.callKit.hasCall && !self.sip.hasCall && !self.audioPlayer.running
@@ -255,9 +256,11 @@ final class AppModel: ObservableObject {
 
     func enterBackground() {
         isForeground = false
-        if keeping {
-            // Always-connected mode: keep the link (and pings) running in the background.
-            dlog("background: staying connected")
+        if keepConnected && (pairing != nil || sipAccount?.isComplete == true) {
+            // Always-connected mode: keep the link (and pings) running in the background. If the
+            // silent loop is not playing right now, the watchdog restarts it.
+            if !keeper.isRunning { startKeeperIfIdle() }
+            dlog("background: staying connected (keeper \(keeper.isRunning ? "on" : "off"))")
             return
         }
         stopPing()
@@ -347,6 +350,7 @@ final class AppModel: ObservableObject {
     // MARK: - Connection
 
     private func connStateChanged(_ s: ConnState) {
+        dlog("link: \(s)")
         conn = s
         if case .awaitingApproval(let code) = s, pairing == nil { pairingStage = .confirm(code: code) }
         if case .failed(let reason) = s, pairing == nil {
@@ -437,7 +441,7 @@ final class AppModel: ObservableObject {
         bgDeadline?.cancel()
         bgDeadline = nil
         // While call audio is playing the app stays alive (audio background mode) and keeps the link.
-        if !isForeground && !listening && !callKit.hasCall && !keeping {
+        if !isForeground && !listening && !callKit.hasCall && !(keepConnected && pairing != nil) {
             client.autoReconnect = false
             client.disconnect()
         }
@@ -497,9 +501,16 @@ final class AppModel: ObservableObject {
         case "sms":
             if let m = JSONBridge.decode(SmsMessage.self, body["msg"]) { incoming(m, live: true) }
         case "audio":
-            if listening, let s = body["d"] as? String, let d = Data(base64Encoded: s) { audioPlayer.enqueue(d) }
+            if listening, let s = body["d"] as? String, let d = Data(base64Encoded: s) {
+                lastAudioAt = Date()
+                audioPlayer.enqueue(d)
+            }
         case "listen":
-            if body["on"] as? Bool == false { stopListeningLocally() }
+            if body["on"] as? Bool == false {
+                dlog("call audio stopped on Android: \(body["reason"] as? String ?? "?")")
+                stopListeningLocally()
+                if isForeground { toast = "Call audio stopped on the Android phone" }
+            }
         case "sms_status":
             guard let ref = body["ref"] as? String, let state = body["state"] as? String else { return }
             updateOutgoing(ref: ref, state: state)
@@ -753,10 +764,44 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Watchdog (background keeper + call audio)
+
+    private var watchdog: Timer?
+    private var lastAudioAt = Date.distantPast
+    private var audioRetries = 0
+
+    /// Every 3 s: keep the silent loop alive in always-connected mode, reconnect a dropped link, and
+    /// re-request call audio if it stalled during a call.
+    private func startWatchdog() {
+        watchdog = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.tick() }
+    }
+
+    private func tick() {
+        let hasLink = pairing != nil
+        if keepConnected && (hasLink || sipAccount?.isComplete == true) && keeper.mayTouchSession() && !keeper.isRunning
+            && !TestHooks.isActive {
+            dlog("watchdog: restarting background keeper")
+            keeper.start()
+        }
+        if hasLink && (isForeground || keepConnected) && client.mode != nil {
+            if case .failed = conn { client.kick() }
+            if case .idle = conn { client.kick() }
+        }
+        if listening && call.state == "offhook" && conn.isReady && Date().timeIntervalSince(lastAudioAt) > 6 && audioRetries < 4 {
+            audioRetries += 1
+            dlog("watchdog: no call audio for 6 s, asking Android again (\(audioRetries))")
+            lastAudioAt = Date()
+            client.request("listen", ["on": true], timeout: 25) { _ in }
+        }
+        if call.isIdle { audioRetries = 0 }
+    }
+
     // MARK: - Listen on iPhone
 
     func setListening(_ on: Bool) {
+        dlog("listen \(on ? "on" : "off")")
         if on {
+            lastAudioAt = Date()
             if callKit.hasCall && callKit.answeredHere {
                 // CallKit owns the session; the engine starts (or already runs) on activation.
                 if callKit.audioActive { audioPlayer.start(managedByCallKit: true) }

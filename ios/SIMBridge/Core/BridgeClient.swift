@@ -43,10 +43,36 @@ enum BridgeError: LocalizedError {
     }
 }
 
-@inline(__always) func dlog(_ s: @autoclosure () -> String) {
+func dlog(_ s: @autoclosure () -> String) {
+    let msg = s()
+    DiagLog.add(msg)
     #if DEBUG
-    NSLog("[SIMBridge] %@", s())
+    NSLog("[SIMBridge] %@", msg)
     #endif
+}
+
+/// Recent events for Settings → Diagnostics (kept in memory, last 400 lines).
+enum DiagLog {
+    private static var lines: [String] = []
+    private static let lock = NSLock()
+    private static let fmt: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
+
+    static func add(_ msg: String) {
+        lock.lock()
+        lines.append(fmt.string(from: Date()) + "  " + msg)
+        if lines.count > 400 { lines.removeFirst(lines.count - 400) }
+        lock.unlock()
+    }
+
+    static var text: String {
+        lock.lock(); defer { lock.unlock() }
+        return lines.joined(separator: "\n")
+    }
 }
 
 /// Encrypted WebSocket link to the Android agent. Everything runs on the main queue.

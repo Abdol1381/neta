@@ -218,16 +218,16 @@ class BridgeService : Service() {
                     val st = BridgeHub.audio.state.value
                     if (st != "ready") throw BridgeError("dev_$st")
                     if (BridgeHub.call.value.state != "offhook") throw BridgeError("no_call")
+                    if (BridgeHub.audio.running) BridgeHub.audio.stop("restart")
+                    audioRestarts = 0
                     try {
-                        BridgeHub.audio.start(
-                            onPcm = { pcm -> BridgeHub.broadcast(JSONObject().put("t", "audio").put("d", android.util.Base64.encodeToString(pcm, android.util.Base64.NO_WRAP))) },
-                            onEnd = { reason -> BridgeHub.broadcast(JSONObject().put("t", "listen").put("on", false).put("reason", reason ?: "stopped")) },
-                        )
+                        startRelay()
                     } catch (e: Exception) {
                         Log.w(TAG, "listen start", e)
+                        BridgeHub.log("call audio failed to start: ${e.message}")
                         throw BridgeError("audio_failed")
                     }
-                    JSONObject().put("on", true)
+                    JSONObject().put("on", true).put("lockSecure", BridgeHub.audio.lockSecure)
                 }
             }
             "ussd" -> JSONObject().put("text", calls.ussd(req.optString("code"), req.optInt("subId", -1).takeIf { it >= 0 }))
@@ -236,9 +236,38 @@ class BridgeService : Service() {
                 JSONObject().put("forwarding", calls.forwardingState())
             }
             "forward_state" -> JSONObject().put("forwarding", calls.forwardingState())
+            "diag" -> JSONObject().put("text", BridgeHub.diagText())
             "contacts" -> JSONObject().put("contacts", contacts.all())
             else -> throw BridgeError("unknown_request")
         }
+    }
+
+    @Volatile private var audioRestarts = 0
+
+    /** Streams call audio; if capture stops on its own during the call, restarts it (up to 4 times). */
+    private fun startRelay() {
+        BridgeHub.audio.start(
+            onPcm = { pcm ->
+                BridgeHub.broadcast(JSONObject().put("t", "audio").put("d", android.util.Base64.encodeToString(pcm, android.util.Base64.NO_WRAP)))
+            },
+            onEnd = { reason ->
+                val inCall = BridgeHub.call.value.state == "offhook"
+                if (reason != null && inCall && audioRestarts < 4) {
+                    audioRestarts++
+                    BridgeHub.log("call audio restarting ($audioRestarts)")
+                    main.postDelayed({
+                        Thread {
+                            try { if (BridgeHub.call.value.state == "offhook") startRelay() } catch (e: Exception) {
+                                BridgeHub.log("call audio restart failed: ${e.message}")
+                                BridgeHub.broadcast(JSONObject().put("t", "listen").put("on", false).put("reason", "failed"))
+                            }
+                        }.start()
+                    }, 800)
+                } else {
+                    BridgeHub.broadcast(JSONObject().put("t", "listen").put("on", false).put("reason", reason ?: "stopped"))
+                }
+            },
+        )
     }
 
     /** Audio routing calls are safest on the main thread. */

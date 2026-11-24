@@ -357,9 +357,11 @@ fun HomeScreen() {
                 when (devAudio) {
                     "ready" -> InfoRow(
                         icon = Icons.Outlined.Hearing,
-                        title = "فعال",
-                        subtitle = "صدای طرف مقابل روی آیفون پخش می‌شود. برای صحبت، با همین گوشی یا هدست بلوتوثِ وصل به آن صحبت کنید.",
-                        tint = Brand.Good,
+                        title = if (BridgeHub.audio.lockSecure) "فعال · قفل صفحه را بردارید" else "فعال",
+                        subtitle = if (BridgeHub.audio.lockSecure)
+                            "در اندروید ۱۱ صدای تماس فقط وقتی گوشی قفل رمزدار نیست گرفته می‌شود. تنظیمات ← امنیت ← قفل صفحه را روی «هیچ» یا «کشیدن» بگذارید."
+                        else "صدای طرف مقابل روی آیفون پخش می‌شود. برای صحبت، با همین گوشی یا هدست بلوتوثِ وصل به آن صحبت کنید.",
+                        tint = if (BridgeHub.audio.lockSecure) Brand.Fair else Brand.Good,
                     )
                     "adb_offline" -> InfoRow(
                         icon = Icons.Outlined.Hearing,
@@ -403,6 +405,28 @@ fun HomeScreen() {
                             modifier = Modifier.height(34.dp),
                         ) { Text("راه‌اندازی", style = MaterialTheme.typography.labelLarge) }
                     }
+                }
+            }
+        }
+
+        item { SectionLabel("عیب‌یابی") }
+        item {
+            Card(padding = 12.dp) {
+                InfoRow(
+                    icon = Icons.Outlined.History,
+                    title = "گزارش رویدادها",
+                    subtitle = "اگر اتصال یا صدا مشکل داشت، این گزارش را کپی کنید و بفرستید.",
+                    tint = MaterialTheme.colorScheme.primary,
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("SIMBridge log", BridgeHub.diagText()))
+                            android.widget.Toast.makeText(ctx, "کپی شد", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        contentPadding = PaddingValues(horizontal = 14.dp),
+                        modifier = Modifier.height(34.dp),
+                    ) { Text("کپی", style = MaterialTheme.typography.labelLarge) }
                 }
             }
         }

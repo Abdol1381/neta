@@ -97,6 +97,21 @@ object BridgeHub {
 
     fun broadcast(event: JSONObject) { server?.broadcast(event) }
 
+    // ---- Diagnostics: recent events, shown in the app and sent to the iPhone's Diagnostics page.
+    private val diag = ArrayDeque<String>()
+    private val diagTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+
+    fun log(msg: String) {
+        val line = diagTime.format(java.util.Date()) + "  " + msg
+        android.util.Log.i("SIMBridge", msg)
+        synchronized(diag) {
+            diag.addLast(line)
+            while (diag.size > 300) diag.removeFirst()
+        }
+    }
+
+    fun diagText(): String = synchronized(diag) { diag.joinToString("\n") }
+
     /** Ping the iPhone over Bluetooth LE so iOS wakes the app in the background. */
     fun wakeClients() { ble?.wake() }
 

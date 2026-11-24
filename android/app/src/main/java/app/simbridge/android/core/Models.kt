@@ -37,6 +37,7 @@ data class DeviceStatus(
     val android: String,
     val perms: Map<String, Boolean>,
     val devAudio: String = "unsupported",
+    val lockSecure: Boolean = false,
 ) {
     fun toJson() = JSONObject().apply {
         put("sims", JSONArray().apply { sims.forEach { put(it.toJson()) } })
@@ -45,6 +46,7 @@ data class DeviceStatus(
         put("device", JSONObject().apply { put("model", model); put("android", android) })
         put("perms", JSONObject().apply { perms.forEach { (k, v) -> put(k, v) } })
         put("devAudio", devAudio)
+        put("lockSecure", lockSecure)
     }
 }
 

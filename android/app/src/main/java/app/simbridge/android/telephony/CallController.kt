@@ -128,6 +128,7 @@ class CallController(private val context: Context, private val contacts: Contact
     }
 
     private fun publish(c: CallInfo, wake: Boolean) {
+        BridgeHub.log("call ${c.state}${if (c.direction.isNotEmpty()) " (${c.direction})" else ""}")
         BridgeHub.call.value = c
         BridgeHub.broadcast(JSONObject().put("t", "call").put("call", c.toJson()))
         if (c.state == "idle") BridgeHub.onCallEnded?.invoke()
