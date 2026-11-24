@@ -1,4 +1,5 @@
 import SwiftUI
+import AudioToolbox
 
 struct PhoneView: View {
     @EnvironmentObject var model: AppModel
@@ -68,6 +69,7 @@ struct KeypadView: View {
                         Button {
                             if suppressTap { suppressTap = false; return }
                             if number.count < 32 { number.append(k.digit) }
+                            Self.playTone(k.digit)
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         } label: {
                             VStack(spacing: -2) {
@@ -134,6 +136,13 @@ struct KeypadView: View {
                 .presentationDetents([.medium])
                 .environment(\.layoutDirection, .rightToLeft)
         }
+    }
+
+    /// The iPhone's own keypad tones (DTMF system sounds 1200–1211).
+    static func playTone(_ key: String) {
+        let ids: [String: SystemSoundID] = ["0": 1200, "1": 1201, "2": 1202, "3": 1203, "4": 1204, "5": 1205,
+                                            "6": 1206, "7": 1207, "8": 1208, "9": 1209, "*": 1210, "#": 1211]
+        if let id = ids[key] { AudioServicesPlaySystemSound(id) }
     }
 
     private var canCall: Bool {

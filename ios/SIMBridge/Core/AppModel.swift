@@ -121,6 +121,10 @@ final class AppModel: ObservableObject {
         ble.onConnectedChange = { [weak self] c in self?.bleConnected = c }
         iphoneContacts.onChange = { [weak self] in self?.contactsChanged() }
         setupCallKit()
+        keeper.mayTouchSession = { [weak self] in
+            guard let self else { return true }
+            return !self.listening && !self.callKit.hasCall && !self.sip.hasCall && !self.audioPlayer.running
+        }
         sip.onChange = { [weak self] in
             guard let self else { return }
             self.sipState = self.sip.registration

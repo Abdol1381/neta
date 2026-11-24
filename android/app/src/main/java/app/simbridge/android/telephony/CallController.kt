@@ -113,6 +113,12 @@ class CallController(private val context: Context, private val contacts: Contact
                     })
                 }
                 publish(CallInfo.IDLE, wake = false)
+                // Reset our audio overrides so the next call starts on the earpiece, unmuted.
+                main.post {
+                    try { applySpeaker(false) } catch (_: Exception) {}
+                    routeChosen = false
+                    try { setMute(false) } catch (_: Exception) {}
+                }
                 lastDialed = null
                 // Wake a backgrounded iPhone so it clears the "incoming call" notification. For a missed
                 // call wait a moment: the dialer writes the call-log entry the iPhone reads on sync.
@@ -134,7 +140,10 @@ class CallController(private val context: Context, private val contacts: Contact
         need(Manifest.permission.ANSWER_PHONE_CALLS)
         if (BridgeHub.call.value.state != "ringing") throw BridgeError("no_call")
         telecom?.acceptRingingCall() ?: throw BridgeError("unsupported")
-        if (speaker) main.postDelayed({ try { setSpeaker(true) } catch (_: Exception) {} }, 1200)
+        // Apply the requested route explicitly once the call is up, so a speaker setting left over
+        // from an earlier call can never carry into this one.
+        routeChosen = false
+        main.postDelayed({ if (!routeChosen) try { applySpeaker(speaker) } catch (_: Exception) {} }, 1200)
     }
 
     /** Rejects a ringing call or hangs up the active one. */
@@ -237,7 +246,16 @@ class CallController(private val context: Context, private val contacts: Contact
     }
 
     @Suppress("DEPRECATION")
+    /** Set when the user picks a route during the current call; the post-answer default then stays out. */
+    @Volatile private var routeChosen = false
+
+    /** User request (iPhone speaker button). */
     fun setSpeaker(on: Boolean): Boolean {
+        routeChosen = true
+        return applySpeaker(on)
+    }
+
+    private fun applySpeaker(on: Boolean): Boolean {
         val am = audio ?: throw BridgeError("unsupported")
         if (Build.VERSION.SDK_INT >= 31) {
             if (on) {

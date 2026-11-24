@@ -6,6 +6,9 @@ import AVFoundation
 /// Android phone open, so calls and SMS arrive instantly instead of waiting for a Bluetooth wake.
 final class BackgroundKeeper {
     private var player: AVAudioPlayer?
+    /// Returns false while a call or call audio owns the audio session. The keeper must never
+    /// re-apply its media-playback category then: that would move the call to the loudspeaker.
+    var mayTouchSession: () -> Bool = { true }
     private var observers: [NSObjectProtocol] = []
 
     var isRunning: Bool { player?.isPlaying == true }
@@ -16,17 +19,20 @@ final class BackgroundKeeper {
             // After a phone call, Siri, an alarm… resume the loop.
             guard let raw = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
-            self?.resume()
+            guard let self, self.mayTouchSession() else { return }
+            self.resume()
         })
         observers.append(nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
             self?.player = nil
-            self?.start()
+            guard let self, self.mayTouchSession() else { return }
+            self.start()
         })
     }
 
     /// Must first be called while the app is in the foreground (iOS does not allow starting audio
     /// from the background).
     func start() {
+        guard mayTouchSession() else { return }
         configureSession()
         if player == nil {
             player = try? AVAudioPlayer(data: Self.silentWav)

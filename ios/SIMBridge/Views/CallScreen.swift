@@ -43,18 +43,18 @@ struct CallScreen: View {
 
                 // Name block at the top, like the iOS call screen.
                 VStack(spacing: 6) {
-                    Text(statusLine)
-                        .font(.body)
-                        .foregroundStyle(.white.opacity(0.75))
-                        .monospacedDigit()
                     Text(title)
                         .font(.system(size: 36, weight: .regular))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .minimumScaleFactor(0.6)
+                    Text(statusLine)
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .monospacedDigit()
                     if !call.name.isEmpty && !call.number.isEmpty {
-                        Text(Phone.ltr(call.number)).font(.body).foregroundStyle(.white.opacity(0.7))
+                        Text(Phone.ltr(call.number)).font(.subheadline).foregroundStyle(.white.opacity(0.55))
                     }
                 }
                 .padding(.horizontal, 24)
