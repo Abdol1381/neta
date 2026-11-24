@@ -104,6 +104,7 @@ struct SignalBarsView: View {
     }
 }
 
+/// Contact monogram in the style of iOS Phone / Messages / Contacts (gray gradient, white initial).
 struct Avatar: View {
     var name: String
     var size: CGFloat = 44
@@ -115,22 +116,23 @@ struct Avatar: View {
         return String(first).uppercased()
     }
 
-    private var color: Color {
-        let palette: [Color] = [Theme.accent, .indigo, .purple, .orange, .pink, .teal, .green, .blue]
-        let h = abs(name.unicodeScalars.reduce(0) { ($0 &* 31) &+ Int($1.value) })
-        return palette[h % palette.count]
-    }
-
     var body: some View {
         ZStack {
-            Circle().fill(color.opacity(0.16))
+            Circle().fill(LinearGradient(colors: [Color(red: 0.66, green: 0.68, blue: 0.73), Color(red: 0.52, green: 0.54, blue: 0.59)],
+                                         startPoint: .top, endPoint: .bottom))
             if initials.isEmpty {
-                Image(systemName: "person.fill").foregroundStyle(color).font(.system(size: size * 0.42))
+                Image(systemName: "person.fill")
+                    .font(.system(size: size * 0.5))
+                    .foregroundStyle(.white)
+                    .offset(y: size * 0.06)
             } else {
-                Text(initials).foregroundStyle(color).font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
+                Text(initials)
+                    .font(.system(size: size * 0.42, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white)
             }
         }
         .frame(width: size, height: size)
+        .clipShape(Circle())
     }
 }
 
@@ -234,4 +236,64 @@ enum Fmt {
         let map: [Character: Character] = ["0": "۰", "1": "۱", "2": "۲", "3": "۳", "4": "۴", "5": "۵", "6": "۶", "7": "۷", "8": "۸", "9": "۹"]
         return String(s.map { map[$0] ?? $0 })
     }
+}
+
+// MARK: - Liquid Glass (iOS 26+) with a blur fallback on older iOS
+
+extension View {
+    /// Liquid Glass in the given shape (iOS 26+); `.ultraThinMaterial` before that.
+    @ViewBuilder
+    func glass<S: Shape>(in shape: S, tint: Color? = nil, interactive: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(Self.makeGlass(tint: tint, interactive: interactive), in: shape)
+        } else {
+            self.background {
+                ZStack {
+                    shape.fill(.ultraThinMaterial)
+                    if let tint { shape.fill(tint.opacity(0.85)) }
+                }
+            }
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private static func makeGlass(tint: Color?, interactive: Bool) -> Glass {
+        var g = Glass.regular
+        if let tint { g = g.tint(tint) }
+        if interactive { g = g.interactive() }
+        return g
+    }
+
+    /// Glass capsule (pills, input fields, chips).
+    func glassCapsule(tint: Color? = nil, interactive: Bool = false) -> some View {
+        glass(in: Capsule(), tint: tint, interactive: interactive)
+    }
+
+    /// Glass circle (round buttons like the iOS keypad and call controls).
+    func glassCircle(tint: Color? = nil, interactive: Bool = true) -> some View {
+        glass(in: Circle(), tint: tint, interactive: interactive)
+    }
+
+    /// Tab bar shrinks while scrolling down (iOS 26 behaviour of Apple's apps).
+    @ViewBuilder
+    func minimizingTabBar() -> some View {
+        if #available(iOS 26.0, *) {
+            self.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            self
+        }
+    }
+}
+
+/// iOS system colours used by Apple's own Phone / Messages apps.
+enum IOSColor {
+    /// SMS bubble green (iMessage is blue).
+    static let smsGreen = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 0.19, green: 0.82, blue: 0.35, alpha: 1) : UIColor(red: 0.20, green: 0.78, blue: 0.35, alpha: 1) })
+    static let iMessageBlue = Color(uiColor: .systemBlue)
+    /// Incoming bubble gray.
+    static let incoming = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 0.15, green: 0.15, blue: 0.16, alpha: 1) : UIColor(red: 0.91, green: 0.91, blue: 0.92, alpha: 1) })
+    static let callGreen = Color(red: 0.20, green: 0.78, blue: 0.35)
+    static let callRed = Color(red: 1.0, green: 0.23, blue: 0.19)
 }

@@ -69,6 +69,7 @@ struct MainTabView: View {
                     .tabItem { Label("تنظیمات", systemImage: "gearshape.fill") }
                     .tag(AppTab.settings)
             }
+            .minimizingTabBar()
         }
     }
 }

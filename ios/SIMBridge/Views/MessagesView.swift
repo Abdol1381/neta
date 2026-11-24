@@ -24,8 +24,11 @@ struct ThreadsView: View {
                 } else {
                     List(filtered) { t in
                         NavigationLink(value: t) { ThreadRow(thread: t) }
+                            .listRowInsets(EdgeInsets(top: 8, leading: 6, bottom: 8, trailing: 14))
+                            .alignmentGuide(.listRowSeparatorLeading) { _ in 64 }
                     }
                     .listStyle(.plain)
+                    .minimizingTabBar()
                 }
             }
             .navigationTitle("پیام‌ها")
@@ -59,33 +62,28 @@ struct ThreadRow: View {
     var thread: SmsThread
 
     var body: some View {
-        HStack(spacing: 12) {
-            Avatar(name: thread.name.isEmpty ? thread.address : thread.name, size: 48)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
+        HStack(alignment: .center, spacing: 10) {
+            Circle()
+                .fill(thread.unread > 0 ? IOSColor.iMessageBlue : Color.clear)
+                .frame(width: 10, height: 10)
+            Avatar(name: thread.name.isEmpty ? thread.address : thread.name, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline) {
                     Text(thread.name.isEmpty ? Phone.ltr(thread.address) : thread.name)
-                        .font(.body.weight(thread.unread > 0 ? .bold : .semibold))
+                        .font(.body.weight(.semibold))
                         .lineLimit(1)
-                    Spacer()
-                    Text(Fmt.short(thread.date)).font(.caption).foregroundStyle(thread.unread > 0 ? Theme.indigo : .secondary)
-                }
-                HStack(alignment: .top) {
-                    Text((thread.out ? "شما: " : "") + thread.snippet)
+                    Spacer(minLength: 6)
+                    Text(Fmt.short(thread.date))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    Spacer()
-                    if thread.unread > 0 {
-                        Text("\(thread.unread)")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 7).padding(.vertical, 3)
-                            .background(Theme.indigo, in: Capsule())
-                    }
                 }
+                Text(thread.snippet)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.vertical, 4)
     }
 }
 
@@ -102,42 +100,52 @@ struct ConversationView: View {
     private var list: [SmsMessage] { model.messages[thread.threadId] ?? [] }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 6) {
-                        if loading && list.isEmpty { ProgressView().padding(.top, 40) }
-                        ForEach(Array(list.enumerated()), id: \.element.id) { i, m in
-                            if i == 0 || !sameDay(list[i - 1].date, m.date) {
-                                Text(Fmt.dayHeader(m.date))
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.vertical, 8)
-                            }
-                            Bubble(message: m).id(m.id)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    if loading && list.isEmpty { ProgressView().padding(.top, 40) }
+                    ForEach(Array(list.enumerated()), id: \.element.id) { i, m in
+                        let prev = i > 0 ? list[i - 1] : nil
+                        let next = i + 1 < list.count ? list[i + 1] : nil
+                        if prev == nil || m.date - prev!.date > 3_600_000 {
+                            Text(Fmt.dayHeader(m.date) + " " + Fmt.clock(m.date))
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 14)
+                                .padding(.bottom, 6)
                         }
-                        Color.clear.frame(height: 4).id("bottom")
+                        let groupedWithNext = next != nil && next!.out == m.out && next!.date - m.date < 60_000 * 3
+                        Bubble(message: m, tail: !groupedWithNext, isLastOut: m.out && m.id == list.last(where: { $0.out })?.id)
+                            .padding(.bottom, groupedWithNext ? 2 : 8)
+                            .id(m.id)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
+                    Color.clear.frame(height: 4).id("bottom")
                 }
-                .scrollDismissesKeyboard(.interactively)
-                .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
-                .onChange(of: list.count) { _ in
-                    withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
-                }
-                .onChange(of: focused) { f in
-                    if f { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } } }
-                }
+                .padding(.horizontal, 12)
             }
-            inputBar
+            .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom) { inputBar }
+            .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+            .onChange(of: list.count) { _ in
+                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
+            .onChange(of: focused) { f in
+                if f { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } } }
+            }
         }
-        .background(Theme.background.ignoresSafeArea())
-        .navigationTitle(thread.title)
+        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 2) {
+                    Avatar(name: thread.name.isEmpty ? thread.address : thread.name, size: 34)
+                    Text(thread.name.isEmpty ? Phone.ltr(thread.address) : thread.name)
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
-                Button { model.dial(thread.address, subId: subId) } label: { Image(systemName: "phone.fill") }
+                Button { model.dial(thread.address, subId: subId) } label: { Image(systemName: "phone") }
                     .disabled(!model.conn.isReady)
             }
         }
@@ -155,78 +163,126 @@ struct ConversationView: View {
         }
     }
 
+    private var routeName: String {
+        if useIMessage { return "iMessage" }
+        let sim = model.sims.first { $0.subId == subId } ?? model.sims.first { $0.smsSim }
+        if model.sims.count > 1, let sim { return "پیامک · سیم " + Fmt.persianDigits(String(sim.slot + 1)) }
+        return "پیامک"
+    }
+
+    private var sendColor: Color { useIMessage ? IOSColor.iMessageBlue : IOSColor.smsGreen }
+
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            if model.sims.count > 1 || MessageComposer.available { SimPicker(subId: $subId, iMessage: $useIMessage) }
-            TextField("پیامک", text: $text, axis: .vertical)
-                .lineLimit(1...6)
-                .focused($focused)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            Button {
-                let body = text
-                text = ""
-                if useIMessage {
-                    composer = ComposerTarget(recipients: [thread.address], body: body)
-                } else {
-                    model.sendSms(to: thread.address, body: body, subId: subId, threadId: thread.threadId)
-                }
-            } label: {
-                Image(systemName: "arrow.up.circle.fill").font(.system(size: 34))
-                    .foregroundStyle(canSend ? (useIMessage ? Color.blue : Theme.accent) : Color.gray.opacity(0.4))
+            if model.sims.count > 1 || MessageComposer.available {
+                SimPicker(subId: $subId, iMessage: $useIMessage)
             }
-            .disabled(!canSend)
+            HStack(alignment: .bottom, spacing: 4) {
+                TextField(routeName, text: $text, axis: .vertical)
+                    .lineLimit(1...6)
+                    .focused($focused)
+                    .padding(.leading, 14)
+                    .padding(.vertical, 9)
+                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button(action: send) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 30))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, canSend ? sendColor : Color.gray.opacity(0.5))
+                    }
+                    .disabled(!canSend)
+                    .padding(.trailing, 3)
+                    .padding(.bottom, 3)
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .frame(minHeight: 38)
+            .glass(in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: text.isEmpty)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(.top, 6)
+        .padding(.bottom, 6)
+    }
+
+    private func send() {
+        let body = text
+        text = ""
+        if useIMessage {
+            composer = ComposerTarget(recipients: [thread.address], body: body)
+        } else {
+            model.sendSms(to: thread.address, body: body, subId: subId, threadId: thread.threadId)
+        }
     }
 
     private var canSend: Bool {
         (useIMessage || model.conn.isReady) && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
-
-    private func sameDay(_ a: Int64, _ b: Int64) -> Bool {
-        Fmt.persianCalendar.isDate(Fmt.date(a), inSameDayAs: Fmt.date(b))
-    }
 }
 
+/// Message bubble in the style of iOS Messages: green for SMS sent from the SIM, gray for received.
 struct Bubble: View {
     var message: SmsMessage
+    var tail: Bool = true
+    var isLastOut: Bool = false
 
     var body: some View {
-        HStack {
-            if !message.out { Spacer(minLength: 56) }
-            VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: message.out ? .leading : .trailing, spacing: 2) {
+            HStack(spacing: 0) {
+                if !message.out { Spacer(minLength: 60) }
                 Text(message.body)
                     .font(.body)
                     .foregroundStyle(message.out ? Color.white : Color.primary)
                     .textSelection(.enabled)
-                HStack(spacing: 4) {
-                    Text(Fmt.clock(message.date))
-                    if message.out { statusIcon }
-                }
-                .font(.caption2)
-                .foregroundStyle(message.out ? Color.white.opacity(0.8) : Color.secondary)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 8)
+                    .background(message.out ? IOSColor.smsGreen : IOSColor.incoming,
+                                in: BubbleShape(outgoing: message.out, tail: tail))
+                    .contextMenu {
+                        Button { UIPasteboard.general.string = message.body } label: { Label("کپی", systemImage: "doc.on.doc") }
+                        Text(Fmt.dayHeader(message.date) + " " + Fmt.clock(message.date))
+                    }
+                if message.out { Spacer(minLength: 60) }
             }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 8)
-            .background(
-                message.out ? Theme.accent : Theme.card,
-                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-            )
-            if message.out { Spacer(minLength: 56) }
+            if message.out && (isLastOut || message.status == "failed" || message.status == "sending") {
+                statusLine
+                    .font(.caption2.weight(.medium))
+                    .padding(.horizontal, 6)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: message.out ? .leading : .trailing)
     }
 
-    @ViewBuilder private var statusIcon: some View {
+    @ViewBuilder private var statusLine: some View {
         switch message.status {
-        case "sending": Image(systemName: "clock")
-        case "failed": Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.poor)
-        case "delivered": Image(systemName: "checkmark.circle.fill")
-        default: Image(systemName: "checkmark")
+        case "sending": Text("در حال ارسال…").foregroundStyle(.secondary)
+        case "failed": Label("ارسال نشد", systemImage: "exclamationmark.circle.fill").foregroundStyle(IOSColor.callRed)
+        case "delivered": Text("تحویل شد").foregroundStyle(.secondary)
+        default: Text("ارسال شد").foregroundStyle(.secondary)
         }
+    }
+}
+
+/// Rounded bubble with the small iOS tail on the bottom corner (RTL: outgoing on the right).
+struct BubbleShape: Shape {
+    var outgoing: Bool
+    var tail: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let r: CGFloat = 18
+        var p = Path(roundedRect: rect, cornerRadius: r, style: .continuous)
+        guard tail else { return p }
+        // In the RTL layout outgoing bubbles sit on the right, so their tail is bottom-right.
+        let right = outgoing
+        let x = right ? rect.maxX : rect.minX
+        let dir: CGFloat = right ? 1 : -1
+        var t = Path()
+        t.move(to: CGPoint(x: x - dir * 10, y: rect.maxY - 12))
+        t.addQuadCurve(to: CGPoint(x: x + dir * 5, y: rect.maxY), control: CGPoint(x: x - dir * 2, y: rect.maxY - 1))
+        t.addQuadCurve(to: CGPoint(x: x - dir * 14, y: rect.maxY - 2), control: CGPoint(x: x - dir * 6, y: rect.maxY + 1))
+        t.closeSubpath()
+        p.addPath(t)
+        return p
     }
 }
 
@@ -292,8 +348,8 @@ struct SimPicker: View {
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .background(Theme.card, in: Capsule())
+            .frame(height: 38)
+            .glassCapsule(interactive: true)
         }
         .onAppear {
             if subId == nil { subId = (model.sims.first { $0.smsSim } ?? model.sims.first)?.subId }

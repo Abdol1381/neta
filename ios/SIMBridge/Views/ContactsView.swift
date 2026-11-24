@@ -1,15 +1,29 @@
 import SwiftUI
 
+/// Contacts in the style of the iPhone's Contacts app: alphabetical sections, then a contact card.
 struct ContactsView: View {
     @EnvironmentObject var model: AppModel
     @State private var search = ""
-    @State private var selected: Contact?
-    @State private var composeTo: String?
 
     private var filtered: [Contact] {
         let q = search.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return model.contacts }
         return model.contacts.filter { $0.name.localizedCaseInsensitiveContains(q) || $0.numbers.contains { $0.contains(q) } }
+    }
+
+    /// Sections by first letter (Persian and Latin), "#" for the rest.
+    private var sections: [(String, [Contact])] {
+        var groups: [String: [Contact]] = [:]
+        for c in filtered {
+            let first = c.name.trimmingCharacters(in: .whitespaces).first.map { String($0).uppercased() } ?? "#"
+            let key = first.unicodeScalars.first.map { CharacterSet.letters.contains($0) } == true ? first : "#"
+            groups[key, default: []].append(c)
+        }
+        return groups.keys.sorted { a, b in
+            if a == "#" { return false }
+            if b == "#" { return true }
+            return a.localizedStandardCompare(b) == .orderedAscending
+        }.map { ($0, groups[$0]!) }
     }
 
     var body: some View {
@@ -19,41 +33,108 @@ struct ContactsView: View {
                     EmptyState(
                         icon: "person.2",
                         title: model.conn.isReady ? "مخاطبی دریافت نشد" : "به گوشی اندروید وصل نیست",
-                        subtitle: "مخاطبین گوشی اندروید (با دسترسی «مخاطبین») اینجا نمایش داده می‌شوند."
+                        subtitle: "مخاطبین آیفون و گوشی اندروید اینجا نمایش داده می‌شوند."
                     )
                 } else {
-                    List(filtered) { c in
-                        Button { selected = c } label: {
-                            HStack(spacing: 12) {
-                                Avatar(name: c.name, size: 40)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(c.name).foregroundStyle(.primary)
-                                    if let n = c.numbers.first {
-                                        Text(Phone.ltr(n)).font(.caption).foregroundStyle(.secondary)
+                    List {
+                        ForEach(sections, id: \.0) { letter, items in
+                            Section(letter) {
+                                ForEach(items) { c in
+                                    NavigationLink(value: c) {
+                                        Text(c.name).font(.body)
                                     }
                                 }
                             }
                         }
                     }
                     .listStyle(.plain)
+                    .minimizingTabBar()
                 }
             }
             .navigationTitle("مخاطبین")
-            .searchable(text: $search, prompt: "جستجوی نام یا شماره")
+            .navigationDestination(for: Contact.self) { ContactDetailView(contact: $0) }
+            .searchable(text: $search, prompt: "جستجو")
             .refreshable { model.loadContacts() }
-            .confirmationDialog(selected?.name ?? "", isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } }), titleVisibility: .visible) {
-                if let c = selected {
-                    ForEach(c.numbers, id: \.self) { n in
-                        Button("تماس با \(Phone.ltr(n))") { model.dial(n) }
-                        Button("پیامک به \(Phone.ltr(n))") { composeTo = n }
+        }
+    }
+}
+
+extension Contact: Hashable {
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
+/// Contact card like iOS: large monogram, name, glass action buttons, numbers.
+struct ContactDetailView: View {
+    @EnvironmentObject var model: AppModel
+    var contact: Contact
+    @State private var composeTo: String?
+
+    private var primary: String? { contact.numbers.first }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                Avatar(name: contact.name, size: 110)
+                    .padding(.top, 12)
+                Text(contact.name)
+                    .font(.system(size: 28, weight: .semibold))
+                    .multilineTextAlignment(.center)
+
+                GlassGroup {
+                    HStack(spacing: 10) {
+                        action("پیام", "message.fill") { composeTo = primary }
+                        action("تماس", "phone.fill") { if let n = primary { model.dial(n) } }
+                        if model.sipState == "ok" {
+                            action("خط اینترنتی", "phone.connection.fill") { if let n = primary { model.dialVoip(n) } }
+                        }
                     }
                 }
-                Button("انصراف", role: .cancel) {}
+                .padding(.horizontal, 16)
+                .disabled(primary == nil)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(contact.numbers.enumerated()), id: \.offset) { i, n in
+                        if i > 0 { Divider().padding(.leading, 16) }
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("موبایل").font(.subheadline).foregroundStyle(.secondary)
+                                Text(Phone.ltr(n)).font(.body).foregroundStyle(IOSColor.iMessageBlue)
+                            }
+                            Spacer()
+                            Button { composeTo = n } label: { Image(systemName: "message").font(.title3) }
+                                .buttonStyle(.borderless)
+                            Button { model.dial(n) } label: { Image(systemName: "phone").font(.title3) }
+                                .buttonStyle(.borderless)
+                                .padding(.leading, 14)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                    }
+                }
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.horizontal, 16)
             }
-            .sheet(item: Binding(get: { composeTo.map { ComposeTarget(number: $0) } }, set: { composeTo = $0?.number })) { t in
-                ComposeView(initialNumber: t.number).environmentObject(model)
-            }
+            .padding(.bottom, 30)
         }
+        .background(Theme.background.ignoresSafeArea())
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: Binding(get: { composeTo.map { ComposeTarget(number: $0) } }, set: { composeTo = $0?.number })) { t in
+            ComposeView(initialNumber: t.number).environmentObject(model)
+        }
+    }
+
+    private func action(_ title: String, _ icon: String, _ run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            VStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 20))
+                Text(title).font(.caption.weight(.medium))
+            }
+            .foregroundStyle(IOSColor.iMessageBlue)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .glass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), interactive: true)
+        }
+        .buttonStyle(.plain)
     }
 }
 

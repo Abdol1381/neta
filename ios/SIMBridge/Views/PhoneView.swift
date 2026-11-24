@@ -16,7 +16,7 @@ struct PhoneView: View {
                 .padding(.vertical, 8)
                 if segment == 0 { KeypadView() } else { RecentsView() }
             }
-            .background(Theme.background.ignoresSafeArea())
+            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
             .navigationTitle("تلفن")
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -70,13 +70,14 @@ struct KeypadView: View {
                             if number.count < 32 { number.append(k.digit) }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         } label: {
-                            VStack(spacing: 0) {
-                                Text(k.digit).font(.system(size: key * 0.42, weight: .regular, design: .rounded))
-                                Text(k.letters).font(.system(size: 9, weight: .semibold)).opacity(0.55).frame(height: 11)
+                            VStack(spacing: -2) {
+                                Text(k.digit).font(.system(size: key * 0.46, weight: .regular))
+                                Text(k.letters).font(.system(size: 10, weight: .bold)).tracking(1.5).opacity(0.75).frame(height: 12)
                             }
                             .frame(width: key, height: key)
-                            .background(Theme.card, in: Circle())
                             .foregroundStyle(.primary)
+                            .contentShape(Circle())
+                            .glassCircle()
                         }
                         .buttonStyle(.plain)
                         .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
@@ -102,7 +103,7 @@ struct KeypadView: View {
                             .font(.system(size: key * 0.36))
                             .foregroundStyle(.white)
                             .frame(width: key, height: key)
-                            .background(canCall ? Theme.good : Color.gray.opacity(0.35), in: Circle())
+                            .background(canCall ? IOSColor.callGreen : Color.gray.opacity(0.35), in: Circle())
                     }
                     .disabled(!canCall)
 
@@ -144,47 +145,56 @@ struct KeypadView: View {
 
 struct RecentsView: View {
     @EnvironmentObject var model: AppModel
+    @State private var missedOnly = false
+
+    private var items: [CallLogEntry] {
+        missedOnly ? model.recents.filter { $0.type == "missed" } : model.recents
+    }
 
     var body: some View {
-        Group {
-            if model.recents.isEmpty {
-                EmptyState(icon: "clock", title: "تماسی ثبت نشده", subtitle: "تاریخچه تماس‌های سیم‌کارت اندروید اینجا نمایش داده می‌شود.")
+        VStack(spacing: 0) {
+            Picker("", selection: $missedOnly) {
+                Text("همه").tag(false)
+                Text("از دست رفته").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 60)
+            .padding(.bottom, 6)
+            if items.isEmpty {
+                EmptyState(icon: "clock", title: missedOnly ? "تماس از دست رفته‌ای نیست" : "تماسی ثبت نشده",
+                           subtitle: "تاریخچه تماس‌های سیم‌کارت اندروید اینجا نمایش داده می‌شود.")
             } else {
-                List(model.recents) { c in
+                List(items) { c in
                     Button {
                         model.dial(c.number)
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: icon(c.type))
-                                .foregroundStyle(c.type == "missed" || c.type == "rejected" ? Theme.poor : Theme.indigo)
-                                .frame(width: 24)
-                            VStack(alignment: .leading, spacing: 2) {
+                            Image(systemName: c.type == "out" ? "phone.arrow.up.right.fill" : "phone.arrow.down.left.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 16)
+                                .opacity(c.type == "out" ? 1 : 0)
+                            VStack(alignment: .leading, spacing: 1) {
                                 Text(c.name.isEmpty ? Phone.ltr(c.title) : c.title)
                                     .font(.body.weight(.semibold))
-                                    .foregroundStyle(c.type == "missed" ? Theme.poor : .primary)
-                                Text(label(c)).font(.caption).foregroundStyle(.secondary)
+                                    .foregroundStyle(c.type == "missed" || c.type == "rejected" ? IOSColor.callRed : .primary)
+                                    .lineLimit(1)
+                                Text(label(c)).font(.subheadline).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text(Fmt.short(c.date)).font(.caption).foregroundStyle(.secondary)
+                            Text(Fmt.short(c.date)).font(.subheadline).foregroundStyle(.secondary)
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .disabled(c.number.isEmpty || !model.conn.isReady)
                 }
                 .listStyle(.plain)
+                .minimizingTabBar()
             }
         }
         .refreshable { model.loadRecents() }
         .onAppear { model.loadRecents() }
-    }
-
-    private func icon(_ t: String) -> String {
-        switch t {
-        case "in": return "phone.arrow.down.left"
-        case "out": return "phone.arrow.up.right"
-        case "missed": return "phone.down"
-        case "rejected", "blocked": return "phone.down.circle"
-        default: return "phone"
-        }
     }
 
     private func label(_ c: CallLogEntry) -> String {

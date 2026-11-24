@@ -143,7 +143,7 @@ struct DashboardView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .glass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), interactive: true)
         }
         .buttonStyle(.plain)
         .disabled(!model.conn.isReady)
