@@ -17,7 +17,7 @@ xcodebuild -project SIMBridge.xcodeproj -scheme SIMBridge -configuration Debug -
   -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd -skipPackagePluginValidation -skipMacroValidation \
   CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=NO build > "$OUT/build.log" 2>&1
 APP="$ROOT/ios/build/dd/Build/Products/Debug-iphonesimulator/SIMBridge.app"
-if [ -d "$APP" ]; then pass "Debug simulator build"; else fail "Debug simulator build"; grep -E "error:" "$OUT/build.log" | head -40; exit 1; fi
+if [ -d "$APP" ] && grep -q "BUILD SUCCEEDED" "$OUT/build.log"; then pass "Debug simulator build"; else fail "Debug simulator build"; grep -E "error:" "$OUT/build.log" | head -40; exit 1; fi
 
 UDID=$(xcrun simctl list devices available -j | python3 -c '
 import json,sys

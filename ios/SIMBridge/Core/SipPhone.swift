@@ -301,10 +301,10 @@ extension SipPhone: CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
-        core?.activateAudioSession(actived: true)
+        core?.activateAudioSession(activated: true)
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
-        core?.activateAudioSession(actived: false)
+        core?.activateAudioSession(activated: false)
     }
 }
