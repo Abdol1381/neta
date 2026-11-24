@@ -45,9 +45,12 @@
 	<array>
 		<string>bluetooth-central</string>
 		<string>audio</string>
+		<string>voip</string>
 	</array>
 	<key>NSContactsUsageDescription</key>
 	<string>برای نمایش نام تماس‌گیرنده و فرستنده پیامک از مخاطبین آیفون شما. مخاطبین از گوشی خارج نمی‌شوند.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>برای صفحه تماس آیفون هنگام جواب دادن به تماس‌های سیم‌کارت اندروید. صدای شما ضبط یا ذخیره نمی‌شود.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>برای اسکن کد QR اتصال به گوشی اندروید.</string>
 	<key>NSLocalNetworkUsageDescription</key>

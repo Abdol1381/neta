@@ -45,6 +45,11 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(autoListen, forKey: "autoListen") }
     }
     let audioPlayer = CallAudioPlayer()
+    let callKit = CallKitManager()
+    /// Ring with the iPhone's own call screen (CallKit).
+    @Published var useCallKit: Bool = UserDefaults.standard.object(forKey: "useCallKit") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(useCallKit, forKey: "useCallKit") }
+    }
     var canListen: Bool { status?.devAudio == "ready" }
     @Published var openThreadId: Int64?
 
@@ -77,6 +82,30 @@ final class AppModel: ObservableObject {
         ble.onWake = { [weak self] in self?.handleWake() }
         ble.onConnectedChange = { [weak self] c in self?.bleConnected = c }
         iphoneContacts.onChange = { [weak self] in self?.contactsChanged() }
+        setupCallKit()
+    }
+
+    private func setupCallKit() {
+        callKit.onAnswer = { [weak self] done in
+            guard let self else { done(false); return }
+            self.client.ensureReady(timeout: 10) { ok in
+                guard ok else { done(false); return }
+                self.answer(speaker: false) { done($0) }
+            }
+        }
+        callKit.onEnd = { [weak self] done in
+            guard let self, !self.call.isIdle else { done(true); return }
+            self.client.ensureReady(timeout: 10) { _ in self.endCall { done($0) } }
+        }
+        callKit.onMute = { [weak self] muted in self?.setMute(muted) }
+        // While a native call is up, keep the audio engine running: it plays the call audio when
+        // listening and keeps the app alive in the background so the call state stays in sync.
+        callKit.onAudioActivated = { [weak self] in self?.audioPlayer.start(managedByCallKit: true) }
+        callKit.onAudioDeactivated = { [weak self] in
+            guard let self else { return }
+            self.audioPlayer.stop()
+            if self.listening { self.audioPlayer.start() }
+        }
     }
 
     // MARK: - Lifecycle
@@ -292,7 +321,7 @@ final class AppModel: ObservableObject {
         bgDeadline?.cancel()
         bgDeadline = nil
         // While call audio is playing the app stays alive (audio background mode) and keeps the link.
-        if !isForeground && !listening {
+        if !isForeground && !listening && !callKit.hasCall {
             client.autoReconnect = false
             client.disconnect()
         }
@@ -370,9 +399,22 @@ final class AppModel: ObservableObject {
         call = c
         if c.state == "ringing" { dlog("caller name: \(c.name)") }
         if c.state == "ringing" && prev.state != "ringing" {
+            if useCallKit && !TestHooks.isActive {
+                callScreenMinimized = true // the native call UI takes over
+                callKit.reportIncoming(number: c.number, name: c.name) { [weak self] ok in
+                    guard let self, !ok, self.call.state == "ringing" else { return }
+                    self.callScreenMinimized = false
+                    Notifier.postIncomingCall(self.call, simLabel: self.simLabel(self.call.subId))
+                }
+            } else {
+                callScreenMinimized = false
+                Notifier.postIncomingCall(c, simLabel: simLabel(c.subId))
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            }
+        }
+        if c.state == "offhook" && prev.state == "ringing" {
+            callKit.answeredElsewhere() // no-op when it was answered on the native screen
             callScreenMinimized = false
-            Notifier.postIncomingCall(c, simLabel: simLabel(c.subId))
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
         }
         if c.state != "ringing" { Notifier.removeIncomingCall() }
         if c.state == "offhook" && prev.state == "idle" { callScreenMinimized = false }
@@ -383,6 +425,7 @@ final class AppModel: ObservableObject {
             }
         }
         if c.isIdle && !prev.isIdle {
+            callKit.ended(missed: prev.state == "ringing")
             stopListeningLocally()
             speakerOn = false
             muted = false
@@ -598,7 +641,12 @@ final class AppModel: ObservableObject {
 
     func setListening(_ on: Bool) {
         if on {
-            audioPlayer.start()
+            if callKit.hasCall && callKit.answeredHere {
+                // CallKit owns the session; the engine starts (or already runs) on activation.
+                if callKit.audioActive { audioPlayer.start(managedByCallKit: true) }
+            } else {
+                audioPlayer.start()
+            }
             listening = true
         }
         client.request("listen", ["on": on], timeout: 25) { [weak self] r in
@@ -617,7 +665,7 @@ final class AppModel: ObservableObject {
     private func stopListeningLocally() {
         guard listening else { return }
         listening = false
-        audioPlayer.stop()
+        if !(callKit.hasCall && callKit.audioActive) { audioPlayer.stop() } // keep the engine for the native call
         // Back in the background without audio: release the connection shortly, as usual.
         if !isForeground { beginBackgroundTask(seconds: 3) }
     }
@@ -645,6 +693,15 @@ final class AppModel: ObservableObject {
         client.request("speaker", ["on": target]) { [weak self] r in
             switch r {
             case .success(let d): self?.speakerOn = d["on"] as? Bool ?? target
+            case .failure(let e): self?.report(e)
+            }
+        }
+    }
+
+    func setMute(_ on: Bool) {
+        client.request("mute", ["on": on]) { [weak self] r in
+            switch r {
+            case .success(let d): self?.muted = d["on"] as? Bool ?? on
             case .failure(let e): self?.report(e)
             }
         }

@@ -88,6 +88,9 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle(isOn: $model.useCallKit) {
+                        Label("زنگ با صفحه تماس آیفون", systemImage: "phone.bubble.left")
+                    }
                     Label("دیدن، پاسخ، رد و قطع تماس، شماره‌گیری با انتخاب سیم، بلندگو، بی‌صدا و کدهای USSD از آیفون", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.primary)
                     Label("صحبت کردن با گوشی اندروید (یا هدست بلوتوثِ وصل به آن) انجام می‌شود", systemImage: "info.circle.fill")
@@ -95,7 +98,7 @@ struct SettingsView: View {
                 } header: {
                     Text("درباره تماس صوتی")
                 } footer: {
-                    Text("برای صدای کامل دوطرفه روی آیفون، درگاه سخت‌افزاری GSM لازم است.")
+                    Text("با «زنگ با صفحه تماس آیفون»، تماس ورودی مثل یک تماس واقعی تمام‌صفحه زنگ می‌خورد (حتی روی صفحه قفل) و پاسخ، رد، قطع و بی‌صدا از همان صفحه کار می‌کند. برای صدای کامل دوطرفه روی آیفون، انتقال تماس به خط اینترنتی یا درگاه GSM لازم است.")
                 }
 
                 Section {

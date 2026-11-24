@@ -13,18 +13,26 @@ final class CallAudioPlayer {
     private var playing = false
     private var queued = 0
     private var pending: [AVAudioPCMBuffer] = []
+    /// true while CallKit owns (activates/deactivates) the audio session.
+    private var managed = false
 
     private static let prebuffer = 4      // 80 ms before starting playback
     private static let maxQueued = 12     // ~240 ms; beyond that drop to keep latency low
 
-    func start() {
-        guard !running else { return }
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playback, mode: .spokenAudio, options: [])
-            try session.setActive(true)
-        } catch {
-            dlog("audio session \(error)")
+    /// - Parameter managedByCallKit: CallKit already activated a voice session (earpiece / speaker /
+    ///   AirPods follow the native call UI); otherwise a playback session is set up here.
+    func start(managedByCallKit: Bool = false) {
+        if running && managed == managedByCallKit { return }
+        if running { stop() }
+        managed = managedByCallKit
+        if !managedByCallKit {
+            let session = AVAudioSession.sharedInstance()
+            do {
+                try session.setCategory(.playback, mode: .spokenAudio, options: [])
+                try session.setActive(true)
+            } catch {
+                dlog("audio session \(error)")
+            }
         }
         if !attached {
             engine.attach(node)
@@ -51,7 +59,8 @@ final class CallAudioPlayer {
         playing = false
         queued = 0
         pending.removeAll()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if !managed { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
+        managed = false
     }
 
     /// Main thread.
