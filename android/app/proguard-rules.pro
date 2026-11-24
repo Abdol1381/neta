@@ -17,3 +17,6 @@
 -dontwarn javax.naming.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+
+# libadb-android uses BouncyCastle / Conscrypt classes reflectively for its TLS + pairing
+-keep class org.bouncycastle.** { *; }

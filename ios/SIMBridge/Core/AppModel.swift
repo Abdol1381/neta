@@ -41,6 +41,13 @@ final class AppModel: ObservableObject {
     @Published var callScreenMinimized = false
     /// Call downlink audio is playing on the iPhone (developer mode on Android).
     @Published private(set) var listening = false
+    /// Call audio on the iPhone's loudspeaker instead of the earpiece (only while listening).
+    @Published private(set) var iphoneSpeaker = false
+
+    func toggleIphoneSpeaker() {
+        iphoneSpeaker.toggle()
+        audioPlayer.setSpeaker(iphoneSpeaker)
+    }
     @Published var autoListen: Bool = UserDefaults.standard.object(forKey: "autoListen") as? Bool ?? true {
         didSet { UserDefaults.standard.set(autoListen, forKey: "autoListen") }
     }
@@ -760,6 +767,7 @@ final class AppModel: ObservableObject {
     private func stopListeningLocally() {
         guard listening else { return }
         listening = false
+        iphoneSpeaker = false
         if !(callKit.hasCall && callKit.audioActive) {
             audioPlayer.stop()
             resumeKeeper()

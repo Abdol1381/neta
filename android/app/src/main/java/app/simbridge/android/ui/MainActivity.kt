@@ -628,7 +628,8 @@ private fun AdbSetupDialog(onClose: () -> Unit) {
     val message by adb.message.collectAsStateWithLifecycle()
     var port by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
-    var manual by remember { mutableStateOf(false) }
+    var connectPort by remember { mutableStateOf("") }
+    var manual by remember { mutableStateOf(adb.paired) }
 
     fun openDevSettings() {
         try {
@@ -665,9 +666,27 @@ private fun AdbSetupDialog(onClose: () -> Unit) {
                         )
                         androidx.compose.material3.OutlinedTextField(
                             value = port, onValueChange = { port = it.filter { c -> c.isDigit() }.take(5) }, singleLine = true,
-                            label = { Text("پورت (اختیاری، عدد بعد از «:»)") },
+                            label = { Text("پورت جفت‌سازی (عدد بعد از «:» در همان پنجره)") },
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                         )
+                        if (adb.paired) {
+                            Text(
+                                "اگر قبلاً جفت شده و فقط وصل نمی‌شود: عدد بعد از «:» در «IP address & Port» صفحه Wireless debugging را وارد کنید.",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.OutlinedTextField(
+                                    value = connectPort, onValueChange = { connectPort = it.filter { c -> c.isDigit() }.take(5) },
+                                    singleLine = true, label = { Text("پورت اتصال") }, modifier = Modifier.weight(1f),
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                                )
+                                HSpacer(8.dp)
+                                FilledTonalButton(
+                                    enabled = connectPort.length >= 4,
+                                    onClick = { connectPort.toIntOrNull()?.let { p -> adb.connectToPort(p) { BridgeHub.audio.refresh() } } },
+                                ) { Text("اتصال") }
+                            }
+                        }
                     }
                     if (state == "connecting") Text("در حال اتصال…", color = MaterialTheme.colorScheme.primary)
                     message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }

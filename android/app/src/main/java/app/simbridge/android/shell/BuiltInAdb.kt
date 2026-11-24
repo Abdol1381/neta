@@ -8,14 +8,15 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import app.simbridge.android.net.NetUtil
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.InputStream
-import java.net.InetSocketAddress
-import java.net.Socket
+import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.TimeoutException
 
 /** A running shell command: stdout plus a way to stop it. */
 interface ShellProc {
@@ -25,12 +26,12 @@ interface ShellProc {
 
 /**
  * Built-in replacement for Shizuku: pairs with and connects to the phone's own Wireless debugging
- * (adbd over TLS on 127.0.0.1) and runs shell commands with ADB privileges.
+ * (adbd over TLS) and runs shell commands with ADB privileges.
  *
- * Robust port finding: mDNS discovery first, then a quick scan of the phone's own local ports (works
- * where mDNS discovery fails). After the first connection the app grants itself
- * WRITE_SECURE_SETTINGS, so after a reboot it can switch Wireless debugging back on and reconnect
- * without the user doing anything.
+ * Ports come from mDNS discovery or from the user (the "IP address & Port" / pairing dialog shown by
+ * Android). Every attempt has a time limit and the exact error is kept for the setup dialog. After the
+ * first connection the app grants itself WRITE_SECURE_SETTINGS, so after a reboot it can switch
+ * Wireless debugging back on and reconnect by itself.
  */
 class BuiltInAdb(private val context: Context) {
     /** unpaired / connecting / offline / ready */
@@ -40,7 +41,9 @@ class BuiltInAdb(private val context: Context) {
     val message = MutableStateFlow<String?>(null)
     private val prefs = context.getSharedPreferences("adb", Context.MODE_PRIVATE)
     private val worker = Executors.newSingleThreadExecutor()
+    private val attempts = Executors.newCachedThreadPool()
     @Volatile private var connecting = false
+    @Volatile private var lastError = ""
 
     val paired: Boolean get() = context.getSharedPreferences("adb", Context.MODE_PRIVATE).getBoolean("paired", false)
 
@@ -55,50 +58,57 @@ class BuiltInAdb(private val context: Context) {
 
     val ready: Boolean get() = try { state.value == "ready" && manager().isConnected } catch (e: Throwable) { false }
 
-    // ---------------------------------------------------------------- pairing
+    /** Loopback first, then the phone's Wi-Fi address (some builds only listen on the Wi-Fi interface). */
+    private val hosts: List<String> get() = (listOf("127.0.0.1") + NetUtil.localAddresses()).distinct()
 
-    /**
-     * Pairs using the 6-digit code from "Pair device with pairing code". [port] may be null: it is then
-     * discovered (mDNS, then local port scan). Runs on a background thread; [done] gets an error text or null.
-     */
-    fun pair(port: Int?, code: String, done: (String?) -> Unit) {
-        worker.execute {
-            val err = try {
-                val candidates = if (port != null) listOf(port) else pairingPortCandidates()
-                if (candidates.isEmpty()) {
-                    "پورت جفت‌سازی پیدا نشد. پنجره «Pair device with pairing code» باید باز باشد."
-                } else {
-                    var ok = false
-                    for (p in candidates) {
-                        ok = try { manager().pair("127.0.0.1", p, code) } catch (e: Exception) {
-                            Log.w(TAG, "pair on $p failed: ${e.message}")
-                            false
-                        }
-                        if (ok) break
-                    }
-                    if (!ok) "جفت‌سازی انجام نشد. کد را دوباره بررسی کنید (هر کد فقط یک بار و برای مدت کوتاهی معتبر است)." else {
-                        prefs.edit().putBoolean("paired", true).apply()
-                        setState("offline")
-                        null
-                    }
-                }
-            } catch (e: Throwable) {
-                Log.w(TAG, "pair", e)
-                "خطا در جفت‌سازی: ${e.message}"
-            }
-            message.value = err
-            if (err == null && !connectBlocking()) {
-                message.value = "جفت شد، ولی اتصال برقرار نشد. «اشکال‌زدایی بی‌سیم» روشن بماند؛ دوباره تلاش می‌شود."
-            }
-            done(err)
+    /** Runs [block] with a time limit; records the error text. */
+    private fun limited(ms: Long, block: () -> Boolean): Boolean {
+        val f = attempts.submit(Callable { block() })
+        return try {
+            f.get(ms, TimeUnit.MILLISECONDS)
+        } catch (e: TimeoutException) {
+            f.cancel(true)
+            lastError = "پاسخی نیامد (timeout)"
+            false
+        } catch (e: ExecutionException) {
+            val c = e.cause ?: e
+            lastError = "${c.javaClass.simpleName}: ${c.message ?: ""}".trim()
+            false
+        } catch (e: Exception) {
+            lastError = e.message ?: e.javaClass.simpleName
+            false
         }
     }
 
-    private fun pairingPortCandidates(): List<Int> {
-        val found = discover("_adb-tls-pairing._tcp", 4000)
-        if (found != null) return listOf(found)
-        val connectPort = prefs.getInt("port", -1)
-        return scanLocalPorts().filter { it != connectPort && it != SELF_PORT }
+    // ---------------------------------------------------------------- pairing
+
+    /**
+     * Pairs using the 6-digit code from "Pair device with pairing code". [port] is the number after ":"
+     * in that dialog; when null it is discovered via mDNS. Runs on a background thread; [done] gets an
+     * error text or null.
+     */
+    fun pair(port: Int?, code: String, done: (String?) -> Unit) {
+        worker.execute {
+            lastError = ""
+            val p = port ?: discover("_adb-tls-pairing._tcp", 5000)
+            val err = if (p == null) {
+                "پورت جفت‌سازی پیدا نشد. در «وارد کردن دستی»، عدد بعد از «:» در پنجره «Pair device with pairing code» را هم وارد کنید."
+            } else {
+                val ok = hosts.any { h -> limited(15_000) { manager().pair(h, p, code) } }
+                if (ok) {
+                    prefs.edit().putBoolean("paired", true).apply()
+                    setState("offline")
+                    null
+                } else {
+                    "جفت‌سازی انجام نشد (پورت ${p}). کد را دوباره بررسی کنید؛ هر کد فقط یک بار و تا وقتی آن پنجره باز است معتبر است.\n$lastError"
+                }
+            }
+            message.value = err
+            if (err == null && !connectBlocking()) {
+                message.value = "جفت شد ✓ ولی اتصال برقرار نشد. در صفحه «Wireless debugging»، عدد بعد از «:» در «IP address & Port» را در «پورت اتصال» وارد کنید.\n$lastError"
+            }
+            done(err)
+        }
     }
 
     // ---------------------------------------------------------------- connecting
@@ -112,8 +122,13 @@ class BuiltInAdb(private val context: Context) {
     /** Connects to a port typed by the user (Wireless debugging → "IP address & Port"). */
     fun connectToPort(port: Int, done: (Boolean) -> Unit) {
         worker.execute {
+            lastError = ""
+            setState("connecting")
             val ok = tryPort(port)
-            if (ok) onConnected(port) else setState("offline")
+            if (ok) onConnected(port) else {
+                setState("offline")
+                message.value = "به پورت $port وصل نشد.\n$lastError"
+            }
             done(ok)
         }
     }
@@ -126,21 +141,20 @@ class BuiltInAdb(private val context: Context) {
         setState("connecting")
         try {
             ensureWirelessDebuggingOn()
-            // 1) last known port, 2) mDNS, 3) local port scan (adbd may need a few seconds after enabling)
             val last = prefs.getInt("port", -1)
             if (last > 0 && tryPort(last)) return onConnected(last)
             repeat(3) { attempt ->
-                discover("_adb-tls-connect._tcp", 3000)?.let { p -> if (tryPort(p)) return onConnected(p) }
-                for (p in scanLocalPorts()) {
-                    if (p != last && tryPort(p)) return onConnected(p)
-                }
-                if (attempt < 2) Thread.sleep(2500)
+                discover("_adb-tls-connect._tcp", 4000)?.let { p -> if (p != last && tryPort(p)) return onConnected(p) }
+                if (attempt < 2) Thread.sleep(2000)
             }
             setState("offline")
-            message.value = "به «اشکال‌زدایی بی‌سیم» وصل نشد. گوشی روی Wi-Fi باشد و این گزینه روشن باشد."
+            message.value = "به «اشکال‌زدایی بی‌سیم» وصل نشد. گوشی روی Wi-Fi باشد و این گزینه روشن باشد؛ " +
+                "یا عدد بعد از «:» در «IP address & Port» را در «پورت اتصال» وارد کنید." +
+                (if (lastError.isNotEmpty()) "\n$lastError" else "")
             return false
         } catch (e: Throwable) {
             Log.w(TAG, "connect", e)
+            lastError = e.message ?: e.javaClass.simpleName
             setState("offline")
             return false
         } finally {
@@ -148,12 +162,13 @@ class BuiltInAdb(private val context: Context) {
         }
     }
 
-    private fun tryPort(port: Int): Boolean = try {
-        manager().connect("127.0.0.1", port)
-    } catch (e: Throwable) {
-        Log.i(TAG, "port $port: ${e.message}")
-        try { manager().disconnect() } catch (_: Throwable) {}
-        false
+    private fun tryPort(port: Int): Boolean {
+        for (h in hosts) {
+            if (limited(10_000) { manager().connect(h, port) }) return true
+            try { manager().disconnect() } catch (_: Throwable) {}
+            Log.i(TAG, "connect $h:$port failed: $lastError")
+        }
+        return false
     }
 
     private fun onConnected(port: Int): Boolean {
@@ -187,6 +202,7 @@ class BuiltInAdb(private val context: Context) {
     fun forget() {
         try { manager().disconnect() } catch (_: Throwable) {}
         prefs.edit().clear().apply()
+        message.value = null
         setState("unpaired")
     }
 
@@ -230,7 +246,7 @@ class BuiltInAdb(private val context: Context) {
                         override fun onResolveFailed(i: NsdServiceInfo, errorCode: Int) {}
                         override fun onServiceResolved(i: NsdServiceInfo) {
                             val host = i.host?.hostAddress ?: ""
-                            val mine = host.startsWith("127.") || host in app.simbridge.android.net.NetUtil.localAddresses()
+                            val mine = host.startsWith("127.") || host in NetUtil.localAddresses()
                             if (mine && port == null) { port = i.port; latch.countDown() }
                         }
                     })
@@ -248,31 +264,7 @@ class BuiltInAdb(private val context: Context) {
         }
     }
 
-    /** Open TCP ports on 127.0.0.1 in the range adbd picks from (fast: closed ports refuse instantly). */
-    private fun scanLocalPorts(): List<Int> {
-        val open = java.util.Collections.synchronizedList(mutableListOf<Int>())
-        val next = AtomicInteger(30000)
-        val pool = Executors.newFixedThreadPool(64)
-        repeat(64) {
-            pool.execute {
-                while (true) {
-                    val p = next.getAndIncrement()
-                    if (p > 60999) break
-                    if (p == SELF_PORT) continue
-                    try {
-                        Socket().use { s -> s.connect(InetSocketAddress("127.0.0.1", p), 150) }
-                        open += p
-                    } catch (_: Exception) {}
-                }
-            }
-        }
-        pool.shutdown()
-        pool.awaitTermination(25, TimeUnit.SECONDS)
-        return open.sorted()
-    }
-
     companion object {
         private const val TAG = "BuiltInAdb"
-        private const val SELF_PORT = 8765
     }
 }

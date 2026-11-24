@@ -129,7 +129,11 @@ struct CallScreen: View {
                 if model.canListen {
                     toggle("شنیدن", model.listening ? "ear.fill" : "ear", model.listening) { model.setListening(!model.listening) }
                 }
-                toggle("بلندگو", model.speakerOn ? "speaker.wave.3.fill" : "speaker.fill", model.speakerOn) { model.toggleSpeaker() }
+                if model.listening {
+                    toggle("بلندگوی آیفون", model.iphoneSpeaker ? "speaker.wave.3.fill" : "speaker.fill", model.iphoneSpeaker) { model.toggleIphoneSpeaker() }
+                } else {
+                    toggle("بلندگو", model.speakerOn ? "speaker.wave.3.fill" : "speaker.fill", model.speakerOn) { model.toggleSpeaker() }
+                }
                 toggle("بی‌صدا", model.muted ? "mic.slash.fill" : "mic.fill", model.muted) { model.toggleMute() }
             }
             roundButton("قطع", "phone.down.fill", Theme.poor) {
