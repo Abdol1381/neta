@@ -69,7 +69,7 @@ class BuiltInAdb(private val context: Context) {
             f.get(ms, TimeUnit.MILLISECONDS)
         } catch (e: TimeoutException) {
             f.cancel(true)
-            lastError = "پاسخی نیامد (timeout)"
+            lastError = "no answer (timeout)"
             false
         } catch (e: ExecutionException) {
             val c = e.cause ?: e
@@ -83,6 +83,82 @@ class BuiltInAdb(private val context: Context) {
 
     // ---------------------------------------------------------------- pairing
 
+    /** idle / searching / found / pairing / done — progress of the pairing helper. */
+    val pairState = MutableStateFlow("idle")
+    /** Port of the "Pair device with pairing code" dialog while it is open (found via mDNS). */
+    @Volatile var pairPort: Int? = null
+        private set
+    var onPairStateChanged: ((String) -> Unit)? = null
+    @Volatile private var searchUntil = 0L
+    @Volatile private var searchThread: Thread? = null
+
+    private fun setPairState(s: String) {
+        if (pairState.value != s) {
+            app.simbridge.android.core.BridgeHub.log("pairing helper: $s${pairPort?.let { " (port $it)" } ?: ""}")
+            pairState.value = s
+            onPairStateChanged?.invoke(s)
+        }
+    }
+
+    /**
+     * Watches (for up to 10 minutes) for the pairing dialog to open, like Shizuku does: the moment the
+     * user taps "Pair device with pairing code", its port appears over mDNS and a notification asks for
+     * the 6-digit code.
+     */
+    fun startPairingSearch() {
+        searchUntil = System.currentTimeMillis() + 10 * 60_000L
+        if (pairState.value != "found" && pairState.value != "pairing") setPairState("searching")
+        if (searchThread?.isAlive == true) return
+        searchThread = Thread({
+            val nsd = context.getSystemService(Context.NSD_SERVICE) as? NsdManager
+            if (nsd == null) { setPairState("idle"); return@Thread }
+            val listener = pairingListener(nsd)
+            try {
+                nsd.discoverServices("_adb-tls-pairing._tcp", NsdManager.PROTOCOL_DNS_SD, listener)
+                while (System.currentTimeMillis() < searchUntil && pairState.value in ACTIVE) Thread.sleep(500)
+            } catch (_: Exception) {
+            } finally {
+                try { nsd.stopServiceDiscovery(listener) } catch (_: Exception) {}
+                if (pairState.value == "searching" || pairState.value == "found") { pairPort = null; setPairState("idle") }
+            }
+        }, "adb-pair-search").apply { isDaemon = true; start() }
+    }
+
+    fun stopPairingSearch() {
+        searchUntil = 0
+        if (pairState.value != "pairing") { pairPort = null; setPairState("idle") }
+    }
+
+    private fun pairingListener(nsd: NsdManager) = object : NsdManager.DiscoveryListener {
+        override fun onDiscoveryStarted(serviceType: String) {}
+        override fun onDiscoveryStopped(serviceType: String) {}
+        override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+            app.simbridge.android.core.BridgeHub.log("pairing helper: mDNS failed ($errorCode)")
+        }
+        override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
+        override fun onServiceLost(info: NsdServiceInfo) {
+            if (pairState.value == "found") { pairPort = null; setPairState("searching") }
+        }
+        override fun onServiceFound(info: NsdServiceInfo) { resolve(nsd, info, 0) }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolve(nsd: NsdManager, info: NsdServiceInfo, attempt: Int) {
+        try {
+            nsd.resolveService(info, object : NsdManager.ResolveListener {
+                override fun onResolveFailed(i: NsdServiceInfo, errorCode: Int) {
+                    // FAILURE_ALREADY_ACTIVE (3): another resolve is running — try again shortly.
+                    if (attempt < 5) Thread { Thread.sleep(400); resolve(nsd, info, attempt + 1) }.start()
+                }
+                override fun onServiceResolved(i: NsdServiceInfo) {
+                    if (!NetUtil.isOwnAddress(i.host)) return
+                    pairPort = i.port
+                    if (pairState.value == "searching") setPairState("found")
+                }
+            })
+        } catch (_: Exception) {}
+    }
+
     /**
      * Pairs using the 6-digit code from "Pair device with pairing code". [port] is the number after ":"
      * in that dialog; when null it is discovered via mDNS. Runs on a background thread; [done] gets an
@@ -91,9 +167,10 @@ class BuiltInAdb(private val context: Context) {
     fun pair(port: Int?, code: String, done: (String?) -> Unit) {
         worker.execute {
             lastError = ""
-            val p = port ?: discover("_adb-tls-pairing._tcp", 5000)
+            setPairState("pairing")
+            val p = port ?: pairPort ?: discover("_adb-tls-pairing._tcp", 5000)
             val err = if (p == null) {
-                "پورت جفت‌سازی پیدا نشد. در «وارد کردن دستی»، عدد بعد از «:» در پنجره «Pair device with pairing code» را هم وارد کنید."
+                "Couldn't find the pairing dialog. Keep \"Pair device with pairing code\" open, or type the port shown after \":\" in that dialog."
             } else {
                 val ok = hosts.any { h -> limited(15_000) { manager().pair(h, p, code) } }
                 if (ok) {
@@ -101,12 +178,15 @@ class BuiltInAdb(private val context: Context) {
                     setState("offline")
                     null
                 } else {
-                    "جفت‌سازی انجام نشد (پورت ${p}). کد را دوباره بررسی کنید؛ هر کد فقط یک بار و تا وقتی آن پنجره باز است معتبر است.\n$lastError"
+                    "Pairing failed (port $p). Check the code — each code works once, and only while that dialog is open.\n$lastError"
                 }
             }
             message.value = err
+            if (err == null) searchUntil = 0
+            pairPort = null
+            setPairState(if (err == null) "done" else if (System.currentTimeMillis() < searchUntil) "searching" else "idle")
             if (err == null && !connectBlocking()) {
-                message.value = "جفت شد ✓ ولی اتصال برقرار نشد. در صفحه «Wireless debugging»، عدد بعد از «:» در «IP address & Port» را در «پورت اتصال» وارد کنید.\n$lastError"
+                message.value = "Paired ✓ but not connected yet. On the Wireless debugging screen, type the number after \":\" under \"IP address & Port\" into Connection port.\n$lastError"
             }
             done(err)
         }
@@ -128,7 +208,7 @@ class BuiltInAdb(private val context: Context) {
             val ok = tryPort(port)
             if (ok) onConnected(port) else {
                 setState("offline")
-                message.value = "به پورت $port وصل نشد.\n$lastError"
+                message.value = "Couldn't connect to port $port.\n$lastError"
             }
             done(ok)
         }
@@ -149,8 +229,8 @@ class BuiltInAdb(private val context: Context) {
                 if (attempt < 2) Thread.sleep(2000)
             }
             setState("offline")
-            message.value = "به «اشکال‌زدایی بی‌سیم» وصل نشد. گوشی روی Wi-Fi باشد و این گزینه روشن باشد؛ " +
-                "یا عدد بعد از «:» در «IP address & Port» را در «پورت اتصال» وارد کنید." +
+            message.value = "Couldn't reach Wireless debugging. Make sure Wi-Fi is connected and Wireless debugging is on, " +
+                "or type the number after \":\" under \"IP address & Port\" into Connection port." +
                 (if (lastError.isNotEmpty()) "\n$lastError" else "")
             return false
         } catch (e: Throwable) {
@@ -246,9 +326,7 @@ class BuiltInAdb(private val context: Context) {
                     nsd.resolveService(info, object : NsdManager.ResolveListener {
                         override fun onResolveFailed(i: NsdServiceInfo, errorCode: Int) {}
                         override fun onServiceResolved(i: NsdServiceInfo) {
-                            val host = i.host?.hostAddress ?: ""
-                            val mine = host.startsWith("127.") || host in NetUtil.localAddresses()
-                            if (mine && port == null) { port = i.port; latch.countDown() }
+                            if (NetUtil.isOwnAddress(i.host) && port == null) { port = i.port; latch.countDown() }
                         }
                     })
                 } catch (_: Exception) {}
@@ -267,5 +345,6 @@ class BuiltInAdb(private val context: Context) {
 
     companion object {
         private const val TAG = "BuiltInAdb"
+        private val ACTIVE = setOf("searching", "found", "pairing")
     }
 }

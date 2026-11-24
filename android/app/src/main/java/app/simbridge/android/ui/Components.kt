@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -105,11 +106,14 @@ fun InfoRow(
     title: String,
     subtitle: String? = null,
     tint: Color = MaterialTheme.colorScheme.primary,
+    action: String? = null,
+    onAction: (() -> Unit)? = null,
     trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    // The action button sits under the text, so long titles and large font sizes never squeeze it.
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = if (action != null) Alignment.Top else Alignment.CenterVertically) {
         Box(
-            Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.12f)),
+            Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) { Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp)) }
         HSpacer(12.dp)
@@ -117,6 +121,13 @@ fun InfoRow(
             Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
             if (!subtitle.isNullOrEmpty()) {
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (action != null && onAction != null) {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = onAction,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(top = 8.dp).heightIn(min = 36.dp),
+                ) { Text(action, style = MaterialTheme.typography.labelLarge) }
             }
         }
         if (trailing != null) { HSpacer(8.dp); trailing() }
@@ -136,7 +147,7 @@ fun Chip(text: String, color: Color = MaterialTheme.colorScheme.primary) {
             .background(color.copy(alpha = 0.12f))
             .padding(horizontal = 8.dp, vertical = 1.dp)
     ) {
-        Text(text, color = color, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        Text(text, color = color, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
     }
 }
 
@@ -159,19 +170,14 @@ fun qrBitmap(text: String, size: Int = 720): ImageBitmap {
     return Bitmap.createBitmap(px, m.width, m.height, Bitmap.Config.ARGB_8888).asImageBitmap()
 }
 
-private val faDigits = charArrayOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
-
-/** Western digits → Persian digits, for labels (never for IPs or phone numbers). */
-fun String.fa(): String = map { if (it in '0'..'9') faDigits[it - '0'] else it }.joinToString("")
-
 fun relativeTime(ms: Long): String {
     if (ms <= 0) return "—"
     val d = (System.currentTimeMillis() - ms) / 1000
     return when {
-        d < 60 -> "همین الان"
-        d < 3600 -> "${d / 60} دقیقه پیش".fa()
-        d < 86400 -> "${d / 3600} ساعت پیش".fa()
-        else -> "${d / 86400} روز پیش".fa()
+        d < 60 -> "just now"
+        d < 3600 -> "${d / 60} min ago"
+        d < 86400 -> "${d / 3600} h ago"
+        else -> "${d / 86400} d ago"
     }
 }
 

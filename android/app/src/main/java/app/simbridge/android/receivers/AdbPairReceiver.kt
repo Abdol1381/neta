@@ -14,54 +14,118 @@ import app.simbridge.android.R
 import app.simbridge.android.core.BridgeHub
 
 /**
- * Pairing with Wireless debugging without leaving the Settings screen: the user opens
- * "Pair device with pairing code", pulls down this notification and types the 6-digit code
- * (optionally followed by the port shown under it, e.g. "482913 37125").
+ * Pairing with Wireless debugging without leaving the Settings screen (the same approach as Shizuku):
+ * while the helper is looking for the pairing dialog a quiet notification says so; the moment
+ * "Pair device with pairing code" opens, a heads-up notification asks for the 6-digit code, which the
+ * user types straight into the notification.
  */
 object AdbPairNotifier {
-    private const val CHANNEL = "adb_pair"
+    private const val CH_ASK = "adb_pair"
+    private const val CH_STATUS = "adb_pair_status"
     private const val ID = 7
     const val KEY = "code"
 
-    private fun channel(context: Context) {
-        context.getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "جفت‌سازی اشکال‌زدایی بی‌سیم", NotificationManager.IMPORTANCE_HIGH)
+    private fun channels(context: Context) {
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(
+            NotificationChannel(CH_ASK, "Pairing code", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Asks for the Wireless debugging pairing code"
+            }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CH_STATUS, "Pairing progress", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Shows while SIMBridge waits for the pairing dialog"
+                setShowBadge(false)
+            }
         )
     }
 
-    fun show(context: Context) {
-        channel(context)
+    fun enabled(context: Context): Boolean {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        val ch = context.getSystemService(NotificationManager::class.java).getNotificationChannel(CH_ASK)
+        return ch == null || ch.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
+    private fun codeAction(context: Context): NotificationCompat.Action {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
         val reply = PendingIntent.getBroadcast(context, 21, Intent(context, AdbPairReceiver::class.java), flags)
-        val input = RemoteInput.Builder(KEY).setLabel("کد ۶ رقمی (و پورت)").build()
-        val action = NotificationCompat.Action.Builder(0, "وارد کردن کد", reply).addRemoteInput(input).build()
-        post(
-            context,
-            NotificationCompat.Builder(context, CHANNEL)
-                .setSmallIcon(R.drawable.ic_stat_bridge)
-                .setContentTitle("جفت‌سازی SIMBridge")
-                .setContentText("در «Pair device with pairing code» کد ۶ رقمی را ببینید و اینجا وارد کنید.")
-                .setStyle(NotificationCompat.BigTextStyle().bigText(
-                    "۱. در گزینه‌های توسعه‌دهنده ← اشکال‌زدایی بی‌سیم، «Pair device with pairing code» را بزنید.\n" +
-                        "۲. این اعلان را پایین بکشید، «وارد کردن کد» را بزنید و کد ۶ رقمی را بنویسید."
-                ))
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setOngoing(true)
-                .addAction(action)
-        )
+        val input = RemoteInput.Builder(KEY).setLabel("6-digit pairing code").build()
+        return NotificationCompat.Action.Builder(0, "Enter code", reply).addRemoteInput(input).build()
     }
 
-    fun status(context: Context, text: String, done: Boolean) {
-        channel(context)
-        val b = NotificationCompat.Builder(context, CHANNEL)
+    private fun cancelAction(context: Context): NotificationCompat.Action {
+        val pi = PendingIntent.getBroadcast(
+            context, 22, Intent(context, AdbPairReceiver::class.java).setAction(ACTION_CANCEL),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return NotificationCompat.Action.Builder(0, "Cancel", pi).build()
+    }
+
+    /** Starts the helper: looks for the pairing dialog and keeps the notification up to date. */
+    fun start(context: Context) {
+        BridgeHub.audio.adb.startPairingSearch()
+        onState(context, BridgeHub.audio.adb.pairState.value)
+    }
+
+    /** Called whenever the helper's state changes. */
+    fun onState(context: Context, state: String) {
+        channels(context)
+        when (state) {
+            "searching" -> post(
+                context,
+                NotificationCompat.Builder(context, CH_STATUS)
+                    .setSmallIcon(R.drawable.ic_stat_bridge)
+                    .setContentTitle("Waiting for the pairing dialog")
+                    .setContentText("Wireless debugging → Pair device with pairing code")
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(
+                        "Open Developer options → Wireless debugging and tap \"Pair device with pairing code\". " +
+                            "This notification will then ask for the 6-digit code."
+                    ))
+                    .setOngoing(true)
+                    .setOnlyAlertOnce(true)
+                    .setProgress(0, 0, true)
+                    .addAction(codeAction(context))
+                    .addAction(cancelAction(context))
+            )
+            "found" -> post(
+                context,
+                NotificationCompat.Builder(context, CH_ASK)
+                    .setSmallIcon(R.drawable.ic_stat_bridge)
+                    .setContentTitle("Enter the pairing code")
+                    .setContentText("Tap \"Enter code\" and type the 6 digits shown in the dialog.")
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setCategory(NotificationCompat.CATEGORY_CALL)
+                    .setOngoing(true)
+                    .addAction(codeAction(context))
+                    .addAction(cancelAction(context))
+            )
+            "pairing" -> status(context, "Pairing and connecting…", done = false)
+            "done" -> status(
+                context,
+                if (BridgeHub.audio.adb.state.value == "ready") "✓ Ready. The other caller's voice will play on the iPhone."
+                else "Paired ✓ Keep Wireless debugging on; SIMBridge connects by itself.",
+                done = true,
+            )
+            else -> cancel(context)
+        }
+    }
+
+    fun status(context: Context, text: String, done: Boolean, retry: Boolean = false) {
+        channels(context)
+        val b = NotificationCompat.Builder(context, CH_STATUS)
             .setSmallIcon(R.drawable.ic_stat_bridge)
-            .setContentTitle("جفت‌سازی SIMBridge")
+            .setContentTitle("SIMBridge pairing")
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setOngoing(!done)
             .setAutoCancel(done)
         if (!done) b.setProgress(0, 0, true)
+        if (retry) b.addAction(codeAction(context)).addAction(cancelAction(context))
         post(context, b)
+    }
+
+    fun cancel(context: Context) {
+        try { NotificationManagerCompat.from(context).cancel(ID) } catch (_: Exception) {}
     }
 
     private fun post(context: Context, b: NotificationCompat.Builder) {
@@ -84,26 +148,29 @@ object AdbPairNotifier {
             ?.toIntOrNull()?.takeIf { it in 1024..65535 }
         return port to code
     }
+
+    const val ACTION_CANCEL = "app.simbridge.android.ADB_PAIR_CANCEL"
 }
 
 class AdbPairReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val adb = BridgeHub.audio.adb
+        if (intent.action == AdbPairNotifier.ACTION_CANCEL) {
+            adb.stopPairingSearch()
+            AdbPairNotifier.cancel(context)
+            return
+        }
         val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(AdbPairNotifier.KEY)?.toString() ?: return
         val parsed = AdbPairNotifier.parse(text)
         if (parsed == null) {
-            AdbPairNotifier.status(context, "کد ۶ رقمی پیدا نشد. دوباره «Pair device with pairing code» را بزنید.", done = true)
-            AdbPairNotifier.show(context)
+            AdbPairNotifier.status(context, "That wasn't a 6-digit code. Tap \"Pair device with pairing code\" again.", done = true)
+            AdbPairNotifier.start(context)
             return
         }
-        AdbPairNotifier.status(context, "در حال جفت‌سازی و اتصال…", done = false)
         val app = context.applicationContext
-        BridgeHub.audio.adb.pair(parsed.first, parsed.second) { err ->
-            AdbPairNotifier.status(
-                app,
-                err ?: if (BridgeHub.audio.adb.state.value == "ready") "✓ آماده است. صدای تماس روی آیفون پخش می‌شود." else
-                    "جفت شد. برای اتصال، «اشکال‌زدایی بی‌سیم» روشن بماند.",
-                done = true,
-            )
+        adb.pair(parsed.first, parsed.second) { err ->
+            // On failure keep the code field in the notification so the user can simply try again.
+            if (err != null) AdbPairNotifier.status(app, err, done = true, retry = true)
             BridgeHub.audio.refresh()
         }
     }

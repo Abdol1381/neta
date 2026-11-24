@@ -53,6 +53,7 @@ class CallAudioRelay(private val context: Context) {
             Log.w(TAG, "shizuku listeners", e)
         }
         adb.onStateChanged = { refresh() }
+        adb.onPairStateChanged = { s -> app.simbridge.android.receivers.AdbPairNotifier.onState(context, s) }
         refresh()
         adb.connectAsync()
     }

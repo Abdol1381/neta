@@ -197,17 +197,20 @@ struct SettingsRow: View {
     var color: Color
     var title: String
     var value: String? = nil
+    /// Icon tiles grow with the text size, like in the Settings app.
+    @ScaledMetric(relativeTo: .body) private var tile: CGFloat = 29
+    @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 15
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: glyph, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 29, height: 29)
-                .background(color, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            Text(title).foregroundStyle(.primary)
-            Spacer()
-            if let value { Text(value).foregroundStyle(.secondary) }
+                .frame(width: tile, height: tile)
+                .background(color, in: RoundedRectangle(cornerRadius: tile * 0.24, style: .continuous))
+            Text(title).foregroundStyle(.primary).layoutPriority(1)
+            Spacer(minLength: 8)
+            if let value { Text(value).foregroundStyle(.secondary).lineLimit(1) }
         }
     }
 }
@@ -225,7 +228,6 @@ struct HearCallsView: View {
                     Text(model.canListen ? "Ready" : "Not Ready").foregroundStyle(model.canListen ? Theme.good : Theme.fair)
                 }
                 Toggle("Play Automatically During Calls", isOn: $model.autoListen)
-                    .disabled(!model.canListen)
                 if model.status?.lockSecure == true {
                     Label("The Android phone has a PIN/pattern screen lock. On Android 11, call audio can only start while it's unlocked — set its screen lock to None or Swipe (Settings → Security → Screen lock).",
                           systemImage: "lock.fill")

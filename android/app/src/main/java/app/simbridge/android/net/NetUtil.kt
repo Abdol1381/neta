@@ -25,6 +25,18 @@ object NetUtil {
         emptyList()
     }
 
+    /** True when [addr] belongs to this phone (any interface, IPv4 or IPv6, or loopback). */
+    fun isOwnAddress(addr: java.net.InetAddress?): Boolean {
+        if (addr == null) return false
+        if (addr.isLoopbackAddress) return true
+        val want = addr.hostAddress?.substringBefore('%') ?: return false
+        return try {
+            NetworkInterface.getNetworkInterfaces().toList().any { iface ->
+                iface.inetAddresses.toList().any { it.hostAddress?.substringBefore('%') == want }
+            }
+        } catch (e: Exception) { false }
+    }
+
     private fun ifacePriority(name: String) = when {
         name.startsWith("wlan") -> 0
         name.startsWith("swlan") || name.startsWith("ap") -> 1

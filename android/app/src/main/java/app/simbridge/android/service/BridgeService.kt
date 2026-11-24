@@ -51,7 +51,7 @@ class BridgeService : Service() {
     override fun onCreate() {
         super.onCreate()
         BridgeHub.init(this)
-        val notif = Notifications.service(this, "در انتظار اتصال آیفون")
+        val notif = Notifications.service(this, "Waiting for the iPhone")
         ServiceCompat.startForeground(
             this, Notifications.ID_SERVICE, notif,
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0,
@@ -125,8 +125,8 @@ class BridgeService : Service() {
 
     private fun onClientsChanged() {
         val clients = BridgeHub.clients.value
-        val text = if (clients.isEmpty()) "در انتظار اتصال آیفون"
-        else "متصل به " + clients.joinToString("، ") { it.name }
+        val text = if (clients.isEmpty()) "Waiting for the iPhone"
+        else "Connected to " + clients.joinToString(", ") { it.name }
         getSystemService(NotificationManager::class.java)
             .notify(Notifications.ID_SERVICE, Notifications.service(this, text))
         // Keep the CPU responsive while an iPhone is actively connected.

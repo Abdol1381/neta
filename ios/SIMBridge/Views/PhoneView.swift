@@ -74,8 +74,9 @@ struct RecentRow: View {
                     .lineLimit(1)
                 Text(kind).font(.subheadline).foregroundStyle(.secondary)
             }
-            Spacer()
-            Text(Fmt.short(entry.date)).font(.subheadline).foregroundStyle(.secondary)
+            .layoutPriority(1)
+            Spacer(minLength: 6)
+            Text(Fmt.short(entry.date)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1).fixedSize()
             Button(action: info) {
                 Image(systemName: "info.circle").font(.system(size: 21)).foregroundStyle(IOSColor.iMessageBlue)
             }

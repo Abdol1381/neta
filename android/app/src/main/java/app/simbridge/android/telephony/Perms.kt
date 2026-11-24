@@ -6,27 +6,27 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 
-/** Permission groups the bridge needs, with Persian labels for the onboarding screen. */
+/** Permission groups the bridge needs, with labels for the onboarding screen. */
 object Perms {
     data class Group(val key: String, val title: String, val reason: String, val permissions: List<String>, val required: Boolean)
 
     val groups: List<Group> = buildList {
-        add(Group("sms", "پیامک", "خواندن، دریافت و ارسال پیامک از طرف آیفون",
+        add(Group("sms", "Messages", "Read, receive and send SMS for the iPhone",
             listOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS, Manifest.permission.SEND_SMS), true))
-        add(Group("phone", "تماس و آنتن", "نمایش آنتن، تشخیص تماس، پاسخ، رد و شماره‌گیری",
+        add(Group("phone", "Phone", "Signal, incoming calls, answer, decline and dial",
             buildList {
                 add(Manifest.permission.READ_PHONE_STATE)
                 add(Manifest.permission.CALL_PHONE)
                 add(Manifest.permission.ANSWER_PHONE_CALLS)
                 add(Manifest.permission.READ_PHONE_NUMBERS)
             }, true))
-        add(Group("callLog", "تاریخچه تماس", "نمایش شماره تماس‌گیرنده و تماس‌های اخیر روی آیفون",
+        add(Group("callLog", "Call history", "Caller number and recent calls on the iPhone",
             listOf(Manifest.permission.READ_CALL_LOG), true))
-        add(Group("contacts", "مخاطبین", "نمایش نام افراد به‌جای شماره",
+        add(Group("contacts", "Contacts", "Show names instead of numbers",
             listOf(Manifest.permission.READ_CONTACTS), false))
-        if (Build.VERSION.SDK_INT >= 33) add(Group("notifications", "اعلان‌ها", "نمایش وضعیت سرویس و درخواست اتصال",
+        if (Build.VERSION.SDK_INT >= 33) add(Group("notifications", "Notifications", "Service status, pairing and connection requests",
             listOf(Manifest.permission.POST_NOTIFICATIONS), false))
-        if (Build.VERSION.SDK_INT >= 31) add(Group("bluetooth", "دستگاه‌های نزدیک (بلوتوث)", "بیدار کردن اپ آیفون در پس‌زمینه برای اعلان فوری",
+        if (Build.VERSION.SDK_INT >= 31) add(Group("bluetooth", "Nearby devices (Bluetooth)", "Wakes the iPhone app in the background for instant alerts",
             listOf(Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT), false))
     }
 

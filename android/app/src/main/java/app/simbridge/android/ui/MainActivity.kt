@@ -1,6 +1,7 @@
 package app.simbridge.android.ui
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -18,25 +19,33 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.Bluetooth
 import androidx.compose.material.icons.outlined.BluetoothDisabled
 import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Hearing
@@ -48,22 +57,24 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PhoneIphone
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,6 +82,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,11 +90,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDirection
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -94,6 +104,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.simbridge.android.core.BridgeHub
 import app.simbridge.android.core.SimState
 import app.simbridge.android.net.NetUtil
+import app.simbridge.android.receivers.AdbPairNotifier
 import app.simbridge.android.service.BridgeService
 import app.simbridge.android.telephony.Perms
 import kotlinx.coroutines.delay
@@ -104,10 +115,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             SimBridgeTheme {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                        HomeScreen()
-                    }
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    HomeScreen()
                 }
             }
         }
@@ -135,6 +144,14 @@ private fun permIcon(key: String): ImageVector = when (key) {
     else -> Icons.Outlined.Bluetooth
 }
 
+private fun Context.open(intent: Intent, fallback: Intent? = null) {
+    try {
+        startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (_: Exception) {
+        if (fallback != null) try { startActivity(fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+    }
+}
+
 @SuppressLint("BatteryLife")
 @Composable
 fun HomeScreen() {
@@ -149,11 +166,13 @@ fun HomeScreen() {
     val call by BridgeHub.call.collectAsStateWithLifecycle()
     val serverError by BridgeHub.serverError.collectAsStateWithLifecycle()
     val devAudio by BridgeHub.audio.state.collectAsStateWithLifecycle()
+    val adbState by BridgeHub.audio.adb.state.collectAsStateWithLifecycle()
     var permTick by remember { mutableIntStateOf(0) }
     val resumeTick = rememberResumeTick()
     var showPair by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf<String?>(null) }
-    var showAdbSetup by remember { mutableStateOf(false) }
+    // Survives leaving the app for Settings and coming back.
+    var showAdbSetup by rememberSaveable { mutableStateOf(false) }
 
     val missing = remember(permTick, resumeTick) { Perms.groups.filterNot { Perms.groupGranted(ctx, it) } }
     val batteryExempt = remember(resumeTick) {
@@ -170,6 +189,7 @@ fun HomeScreen() {
         BridgeHub.audio.refresh()
         BridgeHub.refreshDevices()
         BridgeHub.refreshTelephony?.invoke()
+        if (BridgeHub.audio.adb.paired && adbState != "ready") BridgeHub.audio.adb.connectAsync()
     }
     // First launch: start the bridge automatically once the essentials are granted.
     val essentialsGranted = missing.none { it.required }
@@ -190,8 +210,9 @@ fun HomeScreen() {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("SIMBridge", style = MaterialTheme.typography.headlineSmall)
-                    Text("پل سیم‌کارت به آیفون", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Your SIM, on your iPhone", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                HSpacer(8.dp)
                 Switch(
                     checked = running,
                     onCheckedChange = { on -> if (on) BridgeService.start(ctx) else BridgeService.stop(ctx) },
@@ -211,68 +232,59 @@ fun HomeScreen() {
         }
 
         if (missing.isNotEmpty() || !batteryExempt) {
-            item { SectionLabel("تکمیل راه‌اندازی") }
+            item { SectionLabel("FINISH SETUP") }
             item {
                 Card(padding = 12.dp) {
                     missing.forEachIndexed { i, g ->
                         if (i > 0) RowDivider()
                         InfoRow(
                             icon = permIcon(g.key),
-                            title = g.title + if (g.required) "" else "  ·  اختیاری",
+                            title = g.title + if (g.required) "" else "  ·  optional",
                             subtitle = g.reason,
                             tint = if (g.required) MaterialTheme.colorScheme.primary else Brand.Muted,
-                        ) {
-                            FilledTonalButton(
-                                onClick = { permLauncher.launch(g.permissions.toTypedArray()) },
-                                contentPadding = PaddingValues(horizontal = 14.dp),
-                                modifier = Modifier.height(34.dp),
-                            ) { Text("اجازه", style = MaterialTheme.typography.labelLarge) }
-                        }
+                            action = "Allow",
+                            onAction = { permLauncher.launch(g.permissions.toTypedArray()) },
+                        )
                     }
                     if (!batteryExempt) {
                         if (missing.isNotEmpty()) RowDivider()
                         InfoRow(
                             icon = Icons.Outlined.BatteryAlert,
-                            title = "اجرای دائمی در پس‌زمینه",
-                            subtitle = "تا اتصال هنگام خاموش بودن صفحه قطع نشود",
+                            title = "Run in the background",
+                            subtitle = "Keeps the iPhone connected while the screen is off",
                             tint = Brand.Fair,
-                        ) {
-                            FilledTonalButton(
-                                onClick = {
-                                    try {
-                                        ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.packageName)))
-                                    } catch (e: Exception) {
-                                        ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                                    }
-                                },
-                                contentPadding = PaddingValues(horizontal = 14.dp),
-                                modifier = Modifier.height(34.dp),
-                            ) { Text("فعال‌سازی", style = MaterialTheme.typography.labelLarge) }
-                        }
+                            action = "Turn On",
+                            onAction = {
+                                ctx.open(
+                                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.packageName)),
+                                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+                                )
+                            },
+                        )
                     }
                     if (missing.size > 1) {
                         VSpacer(8.dp)
                         Button(
                             onClick = { permLauncher.launch(missing.flatMap { it.permissions }.toTypedArray()) },
-                            modifier = Modifier.fillMaxWidth().height(46.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp),
                             shape = RoundedCornerShape(14.dp),
-                        ) { Text("اجازه همه") }
+                        ) { Text("Allow All") }
                     }
                     TextButton(
-                        onClick = { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName))) },
+                        onClick = { ctx.open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName))) },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("اگر پنجره اجازه باز نشد: تنظیمات برنامه", style = MaterialTheme.typography.bodySmall) }
+                    ) { Text("No permission prompt? Open app settings", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
                 }
             }
         }
 
-        item { SectionLabel("آنتن") }
+        item { SectionLabel("SIGNAL") }
         item {
             val sims = status?.sims.orEmpty()
             Card(padding = 12.dp) {
                 if (sims.isEmpty()) {
                     Text(
-                        if (!running) "برای نمایش آنتن، سرویس را روشن کنید." else "سیم‌کارتی پیدا نشد یا دسترسی «تماس و آنتن» داده نشده است.",
+                        if (!running) "Turn the service on to see the signal." else "No SIM found, or the Phone permission isn't granted.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(6.dp),
@@ -285,7 +297,7 @@ fun HomeScreen() {
             }
         }
 
-        item { SectionLabel("آیفون‌ها") }
+        item { SectionLabel("IPHONES") }
         item {
             Card(padding = 12.dp) {
                 devices.forEachIndexed { i, d ->
@@ -294,11 +306,11 @@ fun HomeScreen() {
                     InfoRow(
                         icon = Icons.Outlined.PhoneIphone,
                         title = d.name,
-                        subtitle = if (online) "متصل" else "آخرین اتصال: " + relativeTime(d.lastSeen),
+                        subtitle = if (online) "Connected" else "Last seen " + relativeTime(d.lastSeen),
                         tint = if (online) Brand.Good else Brand.Muted,
                     ) {
                         IconButton(onClick = { confirmRemove = d.id }) {
-                            Icon(Icons.Outlined.Close, "حذف", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Outlined.Close, "Remove", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -306,16 +318,16 @@ fun HomeScreen() {
                 Button(
                     onClick = { BridgeHub.startPairing(); showPair = true },
                     enabled = running,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     shape = RoundedCornerShape(14.dp),
                 ) {
                     Icon(Icons.Outlined.QrCode2, null, Modifier.size(20.dp))
                     HSpacer(8.dp)
-                    Text(if (devices.isEmpty()) "اتصال آیفون" else "اتصال آیفون دیگر")
+                    Text(if (devices.isEmpty()) "Connect iPhone" else "Connect Another iPhone")
                 }
                 if (!running) {
                     Text(
-                        "ابتدا سرویس را روشن کنید.",
+                        "Turn the service on first.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth().padding(top = 6.dp), textAlign = TextAlign.Center,
                     )
@@ -323,117 +335,103 @@ fun HomeScreen() {
             }
         }
 
-        item { SectionLabel("ارتباط") }
+        item { SectionLabel("CONNECTION") }
         item {
             Card(padding = 12.dp) {
                 InfoRow(
                     icon = if (addresses.isEmpty()) Icons.Outlined.WifiOff else Icons.Outlined.Wifi,
-                    title = if (addresses.isEmpty()) "به Wi-Fi یا هات‌اسپات وصل نیست" else "شبکه محلی",
-                    subtitle = if (addresses.isEmpty()) "آیفون باید روی همان Wi-Fi یا هات‌اسپات این گوشی باشد"
-                    else "‎" + addresses.joinToString("  ·  "),
+                    title = if (addresses.isEmpty()) "Not on Wi-Fi or hotspot" else "Local network",
+                    subtitle = if (addresses.isEmpty()) "The iPhone must be on the same Wi-Fi, or on this phone's hotspot"
+                    else addresses.joinToString("  ·  "),
                     tint = if (addresses.isEmpty()) Brand.Fair else MaterialTheme.colorScheme.primary,
                 )
                 RowDivider()
                 InfoRow(
                     icon = if (ble) Icons.Outlined.Bluetooth else Icons.Outlined.BluetoothDisabled,
-                    title = if (ble) "اعلان فوری بلوتوث" else "اعلان فوری بلوتوث خاموش",
-                    subtitle = if (ble) "آیفون حتی در پس‌زمینه باخبر می‌شود" else "بلوتوث را روشن کنید و دسترسی «دستگاه‌های نزدیک» را بدهید",
+                    title = if (ble) "Bluetooth wake-up" else "Bluetooth wake-up is off",
+                    subtitle = if (ble) "Wakes the iPhone app even in the background" else "Turn Bluetooth on and allow Nearby devices",
                     tint = if (ble) MaterialTheme.colorScheme.primary else Brand.Muted,
                 )
                 RowDivider()
                 InfoRow(
                     icon = Icons.Outlined.Lock,
-                    title = "رمزنگاری سرتاسری",
-                    subtitle = "مستقیم بین دو گوشی، بدون سرور",
+                    title = "End-to-end encrypted",
+                    subtitle = "Directly between the two phones, no server",
                     tint = Brand.Good,
                 )
             }
         }
 
-        item { SectionLabel("شنیدن تماس روی آیفون") }
+        item { SectionLabel("HEAR CALLS ON IPHONE") }
         item {
             Card(padding = 12.dp) {
-                val adbState by BridgeHub.audio.adb.state.collectAsStateWithLifecycle()
+                val lock = BridgeHub.audio.lockSecure
                 when (devAudio) {
                     "ready" -> InfoRow(
                         icon = Icons.Outlined.Hearing,
-                        title = if (BridgeHub.audio.lockSecure) "فعال · قفل صفحه را بردارید" else "فعال",
-                        subtitle = if (BridgeHub.audio.lockSecure)
-                            "در اندروید ۱۱ صدای تماس فقط وقتی گوشی قفل رمزدار نیست گرفته می‌شود. تنظیمات ← امنیت ← قفل صفحه را روی «هیچ» یا «کشیدن» بگذارید."
-                        else "صدای طرف مقابل روی آیفون پخش می‌شود. برای صحبت، با همین گوشی یا هدست بلوتوثِ وصل به آن صحبت کنید.",
-                        tint = if (BridgeHub.audio.lockSecure) Brand.Fair else Brand.Good,
+                        title = if (lock) "On · remove the screen lock" else "On",
+                        subtitle = if (lock)
+                            "On Android 11, call audio can only be captured when the phone has no PIN or pattern. " +
+                                "Settings → Security → Screen lock → None or Swipe."
+                        else "The other caller's voice plays on the iPhone. Speak into this phone, or a Bluetooth headset paired with it.",
+                        tint = if (lock) Brand.Fair else Brand.Good,
                     )
                     "adb_offline" -> InfoRow(
                         icon = Icons.Outlined.Hearing,
-                        title = if (adbState == "connecting") "در حال اتصال…" else "اتصال برقرار نیست",
-                        subtitle = "گوشی را به Wi-Fi وصل کنید و «اشکال‌زدایی بی‌سیم» روشن باشد. اتصال خودکار انجام می‌شود.",
+                        title = if (adbState == "connecting") "Connecting…" else "Not connected",
+                        subtitle = "Connect to Wi-Fi and keep Wireless debugging on. SIMBridge reconnects by itself.",
                         tint = Brand.Fair,
-                    ) {
-                        FilledTonalButton(
-                            onClick = { showAdbSetup = true; BridgeHub.audio.adb.connectAsync() },
-                            contentPadding = PaddingValues(horizontal = 14.dp),
-                            modifier = Modifier.height(34.dp),
-                        ) { Text("اتصال", style = MaterialTheme.typography.labelLarge) }
-                    }
+                        action = "Fix",
+                        onAction = { showAdbSetup = true; BridgeHub.audio.adb.connectAsync() },
+                    )
                     "no_permission" -> InfoRow(
                         icon = Icons.Outlined.Hearing,
-                        title = "اجازه Shizuku لازم است",
-                        subtitle = "Shizuku فعال است؛ به SIMBridge اجازه بدهید (یا از «راه‌اندازی» داخلی استفاده کنید).",
+                        title = "Shizuku permission needed",
+                        subtitle = "Shizuku is running — allow SIMBridge, or use the built-in setup instead.",
                         tint = Brand.Fair,
-                    ) {
-                        FilledTonalButton(
-                            onClick = { BridgeHub.audio.requestShizukuPermission() },
-                            contentPadding = PaddingValues(horizontal = 14.dp),
-                            modifier = Modifier.height(34.dp),
-                        ) { Text("اجازه", style = MaterialTheme.typography.labelLarge) }
-                    }
+                        action = "Allow",
+                        onAction = { BridgeHub.audio.requestShizukuPermission() },
+                    )
                     "unsupported" -> InfoRow(
                         icon = Icons.Outlined.Hearing,
-                        title = "پشتیبانی نمی‌شود",
-                        subtitle = "این قابلیت به اندروید ۱۱ یا جدیدتر نیاز دارد.",
+                        title = "Not supported",
+                        subtitle = "Needs Android 11 or later.",
                         tint = Brand.Muted,
                     )
                     else -> InfoRow(
                         icon = Icons.Outlined.Hearing,
-                        title = "اختیاری · بدون روت",
-                        subtitle = "یک بار با «اشکال‌زدایی بی‌سیم» جفت کنید تا صدای طرف مقابل تماس روی آیفون پخش شود. بعد از آن خودکار است.",
+                        title = "Optional · no root needed",
+                        subtitle = "Pair once with Wireless debugging so the other caller's voice plays on the iPhone. After that it's automatic.",
                         tint = Brand.Muted,
-                    ) {
-                        FilledTonalButton(
-                            onClick = { showAdbSetup = true },
-                            contentPadding = PaddingValues(horizontal = 14.dp),
-                            modifier = Modifier.height(34.dp),
-                        ) { Text("راه‌اندازی", style = MaterialTheme.typography.labelLarge) }
-                    }
+                        action = "Set Up",
+                        onAction = { showAdbSetup = true },
+                    )
                 }
             }
         }
 
-        item { SectionLabel("عیب‌یابی") }
+        item { SectionLabel("TROUBLESHOOTING") }
         item {
             Card(padding = 12.dp) {
                 InfoRow(
                     icon = Icons.Outlined.History,
-                    title = "گزارش رویدادها",
-                    subtitle = "اگر اتصال یا صدا مشکل داشت، این گزارش را کپی کنید و بفرستید.",
+                    title = "Event log",
+                    subtitle = "If the connection or audio misbehaves, copy this log and send it.",
                     tint = MaterialTheme.colorScheme.primary,
-                ) {
-                    FilledTonalButton(
-                        onClick = {
-                            val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
-                            cm.setPrimaryClip(android.content.ClipData.newPlainText("SIMBridge log", BridgeHub.diagText()))
-                            android.widget.Toast.makeText(ctx, "کپی شد", android.widget.Toast.LENGTH_SHORT).show()
-                        },
-                        contentPadding = PaddingValues(horizontal = 14.dp),
-                        modifier = Modifier.height(34.dp),
-                    ) { Text("کپی", style = MaterialTheme.typography.labelLarge) }
-                }
+                    action = "Copy Log",
+                    onAction = {
+                        val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("SIMBridge log", BridgeHub.diagText()))
+                        android.widget.Toast.makeText(ctx, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                )
             }
         }
 
         item {
             Text(
-                "پاسخ، رد، شماره‌گیری، بلندگو و بی‌صدا از آیفون کار می‌کند. صحبت کردن با همین گوشی (یا هدست بلوتوثِ وصل به آن) است؛ اندروید اجازه ارسال صدای آیفون به داخل تماس را نمی‌دهد.",
+                "Answer, decline, dial, speaker and mute all work from the iPhone. You talk through this phone " +
+                    "(or a Bluetooth headset paired with it) — Android doesn't let apps send the iPhone's microphone into a call.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -452,24 +450,24 @@ fun HomeScreen() {
         AlertDialog(
             onDismissRequest = {},
             icon = { Icon(Icons.Outlined.PhoneIphone, null) },
-            title = { Text("اتصال «⁨${req.name}⁩»", textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge) },
+            title = { Text("Connect \"${req.name}\"?", textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        "اگر همین کد روی آیفون نمایش داده می‌شود، تأیید کنید.",
+                        "Approve only if the iPhone shows the same code.",
                         textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     VSpacer(16.dp)
                     Text(
                         req.code.toCharArray().joinToString("  "),
-                        style = MaterialTheme.typography.displaySmall.copy(textDirection = TextDirection.Ltr, letterSpacing = 2.sp),
+                        style = MaterialTheme.typography.displaySmall.copy(letterSpacing = 2.sp),
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
             },
-            confirmButton = { Button(onClick = { BridgeHub.resolvePairing(true) }) { Text("تأیید") } },
-            dismissButton = { TextButton(onClick = { BridgeHub.resolvePairing(false) }) { Text("رد") } },
+            confirmButton = { Button(onClick = { BridgeHub.resolvePairing(true) }) { Text("Approve") } },
+            dismissButton = { TextButton(onClick = { BridgeHub.resolvePairing(false) }) { Text("Decline") } },
         )
     }
 
@@ -478,19 +476,20 @@ fun HomeScreen() {
     confirmRemove?.let { id ->
         AlertDialog(
             onDismissRequest = { confirmRemove = null },
-            title = { Text("حذف این آیفون؟", style = MaterialTheme.typography.titleLarge) },
-            text = { Text("اتصال این آیفون قطع می‌شود و برای اتصال دوباره باید QR جدید اسکن شود.") },
+            title = { Text("Remove this iPhone?", style = MaterialTheme.typography.titleLarge) },
+            text = { Text("It will be disconnected and has to scan a new QR code to connect again.") },
             confirmButton = {
                 Button(
                     onClick = { BridgeHub.revoke(id); confirmRemove = null },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                ) { Text("حذف") }
+                ) { Text("Remove") }
             },
-            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("انصراف") } },
+            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Cancel") } },
         )
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StatusCard(
     running: Boolean,
@@ -508,11 +507,11 @@ private fun StatusCard(
     }
     val animated by animateColorAsState(color, label = "status")
     val (title, subtitle) = when {
-        !running -> "خاموش" to "برای استفاده از آیفون، سرویس را روشن کنید"
-        error != null -> "خطای شبکه" to error
-        connected.isNotEmpty() -> ("متصل به " + connected.joinToString("، ") { "⁨$it⁩" }) to "پیامک، تماس و آنتن روی آیفون در دسترس است"
-        !hasNetwork -> "در انتظار شبکه" to "به Wi-Fi وصل شوید یا هات‌اسپات را روشن کنید"
-        else -> "آماده" to "در انتظار اتصال آیفون"
+        !running -> "Off" to "Turn the service on to use your iPhone"
+        error != null -> "Network error" to error
+        connected.isNotEmpty() -> ("Connected to " + connected.joinToString(", ")) to "Messages, calls and signal are on the iPhone"
+        !hasNetwork -> "Waiting for a network" to "Join Wi-Fi or turn on the hotspot"
+        else -> "Ready" to "Waiting for the iPhone"
     }
     Card(padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -538,49 +537,53 @@ private fun StatusCard(
         }
         if (running && (callState != "idle" || airplane)) {
             VSpacer(12.dp)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (callState == "ringing") Chip("تماس ورودی", Brand.Good)
-                if (callState == "offhook") Chip("در حال مکالمه", Brand.Good)
-                if (airplane) Chip("حالت پرواز", Brand.Fair)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (callState == "ringing") Chip("Incoming call", Brand.Good)
+                if (callState == "offhook") Chip("On a call", Brand.Good)
+                if (airplane) Chip("Airplane mode", Brand.Fair)
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SimRow(sim: SimState, multi: Boolean) {
     val inService = sim.service == "in"
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
             SignalBars(sim.level, inService, height = 20.dp, barWidth = 5.dp)
         }
         HSpacer(12.dp)
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 Text(sim.carrier.ifBlank { sim.displayName }, style = MaterialTheme.typography.titleSmall)
                 if (sim.gen.isNotBlank()) Chip(sim.gen)
-                if (sim.roaming) Chip("رومینگ", Brand.Fair)
+                if (sim.roaming) Chip("Roaming", Brand.Fair)
+                if (multi) {
+                    if (sim.isDefaultSms) Chip("SMS")
+                    if (sim.isDefaultVoice) Chip("Calls")
+                }
             }
             Text(
                 buildString {
-                    if (multi) append("سیم ${sim.slot + 1}".fa()).append("  ·  ")
+                    if (multi) append("SIM ${sim.slot + 1}").append("  ·  ")
                     append(
                         when (sim.service) {
-                            "in" -> "در سرویس"
-                            "out" -> "بدون آنتن"
-                            "emergency" -> "فقط تماس اضطراری"
-                            "off" -> "رادیو خاموش"
-                            else -> "در حال بررسی"
+                            "in" -> "In service"
+                            "out" -> "No service"
+                            "emergency" -> "Emergency calls only"
+                            "off" -> "Radio off"
+                            else -> "Checking…"
                         }
                     )
-                    sim.dbm?.let { append("  ·  ").append("‎$it dBm‏") }
+                    sim.dbm?.let { append("  ·  ").append("$it dBm") }
                 },
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        if (multi) {
-            val roles = listOfNotNull("پیامک".takeIf { sim.isDefaultSms }, "تماس".takeIf { sim.isDefaultVoice })
-            if (roles.isNotEmpty()) Text(roles.joinToString("، "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -605,13 +608,16 @@ private fun PairDialog(onClose: () -> Unit) {
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier.padding(24.dp).fillMaxWidth(),
+            modifier = Modifier.padding(24.dp).widthIn(max = 420.dp).fillMaxWidth(),
         ) {
-            Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("اتصال آیفون", style = MaterialTheme.typography.titleLarge)
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("Connect iPhone", style = MaterialTheme.typography.titleLarge)
                 VSpacer(6.dp)
                 Text(
-                    "در اپ SIMBridge آیفون «اسکن QR» را بزنید.",
+                    "In SIMBridge on the iPhone, tap Scan QR Code.",
                     textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -619,123 +625,240 @@ private fun PairDialog(onClose: () -> Unit) {
                 Box(
                     Modifier.fillMaxWidth(0.82f).aspectRatio(1f).clip(RoundedCornerShape(20.dp))
                         .background(Color.White).padding(16.dp)
-                ) { Image(qr, "QR", Modifier.fillMaxSize()) }
+                ) { Image(qr, "QR code", Modifier.fillMaxSize()) }
                 VSpacer(14.dp)
                 Text(
-                    "اعتبار ${left / 60}:${(left % 60).toString().padStart(2, '0')}".fa(),
+                    "Valid for ${left / 60}:${(left % 60).toString().padStart(2, '0')}",
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (hosts.isEmpty()) {
                     VSpacer(8.dp)
                     Text(
-                        "این گوشی به Wi-Fi یا هات‌اسپات وصل نیست؛ آیفون به آن نمی‌رسد.",
+                        "This phone isn't on Wi-Fi or hotspot, so the iPhone can't reach it.",
                         color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
                 VSpacer(16.dp)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TextButton(onClick = { BridgeHub.startPairing() }) { Text("کد جدید") }
-                    Button(onClick = onClose, shape = RoundedCornerShape(14.dp)) { Text("بستن") }
+                    TextButton(onClick = { BridgeHub.startPairing() }) { Text("New Code") }
+                    Button(onClick = onClose, shape = RoundedCornerShape(14.dp)) { Text("Done") }
                 }
             }
         }
     }
 }
 
-/** One-time pairing with the phone's own Wireless debugging (built-in replacement for Shizuku). */
+// ------------------------------------------------------------------------------------------------
+// Hear calls on iPhone: one-time pairing with the phone's own Wireless debugging (no root, no Shizuku)
+
+private fun devOptionsOn(ctx: Context) =
+    Settings.Global.getInt(ctx.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
+
+private fun wirelessDebuggingOn(ctx: Context) =
+    try { Settings.Global.getInt(ctx.contentResolver, "adb_wifi_enabled", 0) == 1 } catch (_: Exception) { false }
+
+/** Developer options, scrolled to (and highlighting) Wireless debugging. */
+private fun openWirelessDebugging(ctx: Context) {
+    ctx.open(
+        Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+            .putExtra(":settings:fragment_args_key", "toggle_adb_wireless")
+            .addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS),
+        Intent(Settings.ACTION_SETTINGS),
+    )
+}
+
 @Composable
 private fun AdbSetupDialog(onClose: () -> Unit) {
     val ctx = LocalContext.current
     val adb = BridgeHub.audio.adb
     val state by adb.state.collectAsStateWithLifecycle()
+    val pairState by adb.pairState.collectAsStateWithLifecycle()
     val message by adb.message.collectAsStateWithLifecycle()
-    var port by remember { mutableStateOf("") }
-    var code by remember { mutableStateOf("") }
-    var connectPort by remember { mutableStateOf("") }
-    var manual by remember { mutableStateOf(adb.paired) }
+    var code by rememberSaveable { mutableStateOf("") }
+    var port by rememberSaveable { mutableStateOf("") }
+    var connectPort by rememberSaveable { mutableStateOf("") }
+    var manual by rememberSaveable { mutableStateOf(false) }
 
-    fun openDevSettings() {
-        try {
-            ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (_: Exception) {
-            ctx.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
-    }
+    // Re-read the system settings every second while open (the user toggles them in Settings).
+    var tick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { delay(1000); tick++ } }
+    val resume = rememberResumeTick()
+    val dev = remember(tick, resume) { devOptionsOn(ctx) }
+    val wifi = remember(tick, resume) { NetUtil.localAddresses().isNotEmpty() }
+    val wd = remember(tick, resume) { wirelessDebuggingOn(ctx) }
+    val notifOk = remember(tick, resume) { AdbPairNotifier.enabled(ctx) }
+    val ready = state == "ready"
+    val paired = adb.paired
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onClose,
-        title = { Text("راه‌اندازی شنیدن تماس", style = MaterialTheme.typography.titleLarge) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (state == "ready") {
-                    Text("✓ آماده است. صدای طرف مقابل در تماس‌ها روی آیفون پخش می‌شود.", color = Brand.Good)
-                } else {
-                    Text(
-                        "۱. حالت توسعه‌دهنده: تنظیمات ← درباره تلفن ← ۷ بار روی «Build number».\n" +
-                            "۲. گوشی به Wi-Fi وصل باشد. در «گزینه‌های توسعه‌دهنده»، «اشکال‌زدایی بی‌سیم» (Wireless debugging) را روشن کنید.\n" +
-                            "۳. داخل آن، «Pair device with pairing code» را بزنید.\n" +
-                            "۴. اعلان «جفت‌سازی SIMBridge» را پایین بکشید و کد ۶ رقمی را وارد کنید.",
-                        style = MaterialTheme.typography.bodyMedium,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).imePadding()
+                .padding(16.dp).widthIn(max = 480.dp).fillMaxWidth(),
+        ) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
+                Text("Hear Calls on iPhone", style = MaterialTheme.typography.titleLarge)
+                VSpacer(4.dp)
+                Text(
+                    if (ready) "All set. The other caller's voice plays on the iPhone during calls."
+                    else "A one-time setup. After a restart SIMBridge turns Wireless debugging back on and reconnects by itself.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                VSpacer(14.dp)
+
+                Step(
+                    done = dev, title = "Developer options",
+                    detail = "Settings → About phone → tap Build number 7 times.",
+                    action = if (!dev) "Open About Phone" else null,
+                ) { ctx.open(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS), Intent(Settings.ACTION_SETTINGS)) }
+                Step(
+                    done = wifi, title = "Wi-Fi connected",
+                    detail = "Wireless debugging only works on Wi-Fi (any network, internet not needed).",
+                    action = if (!wifi) "Wi-Fi Settings" else null,
+                ) { ctx.open(Intent(Settings.ACTION_WIFI_SETTINGS)) }
+                Step(
+                    done = wd || ready, title = "Wireless debugging on",
+                    detail = "Developer options → Wireless debugging → On (tap Allow).",
+                    action = if (!wd && !ready && dev) "Open Wireless Debugging" else null,
+                ) { openWirelessDebugging(ctx) }
+
+                val pairDone = paired || ready
+                Step(
+                    done = pairDone, busy = pairState == "searching" || pairState == "pairing" || state == "connecting",
+                    title = when {
+                        ready -> "Paired and connected"
+                        paired -> if (state == "connecting") "Connecting…" else "Paired"
+                        pairState == "found" -> "Pairing dialog found — enter the code"
+                        pairState == "searching" -> "Waiting for the pairing dialog…"
+                        pairState == "pairing" -> "Pairing…"
+                        else -> "Pair this app"
+                    },
+                    detail = when {
+                        ready -> null
+                        paired -> "If it doesn't connect, open Wireless debugging once, or type the connection port below."
+                        pairState == "found" -> "Pull down the notification and type the 6-digit code — or type it here."
+                        pairState == "searching" -> "Inside Wireless debugging tap \"Pair device with pairing code\". A notification will ask for the code."
+                        else -> "Tap Start Pairing, then \"Pair device with pairing code\". Enter the 6-digit code in the notification."
+                    },
+                    action = if (!pairDone && pairState == "idle") "Start Pairing" else if (!pairDone && pairState == "searching") "Open Wireless Debugging" else null,
+                ) {
+                    AdbPairNotifier.start(ctx)
+                    openWirelessDebugging(ctx)
+                }
+
+                if (!notifOk && !pairDone) {
+                    VSpacer(6.dp)
+                    InfoRow(
+                        icon = Icons.Outlined.Notifications,
+                        title = "Notifications are off for SIMBridge",
+                        subtitle = "The pairing code is typed into a notification. Turn them on, or enter the code manually below.",
+                        tint = Brand.Fair,
+                        action = "Turn On",
+                        onAction = {
+                            ctx.open(
+                                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName),
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName)),
+                            )
+                        },
                     )
+                }
+
+                // In-app code entry: useful in split screen, or when the dialog was found.
+                if (!pairDone && (pairState == "found" || manual)) {
+                    VSpacer(8.dp)
+                    OutlinedTextField(
+                        value = code, onValueChange = { code = it.filter { c -> c.isDigit() }.take(6) }, singleLine = true,
+                        label = { Text("6-digit pairing code") }, modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                    if (manual && pairState != "found") {
+                        VSpacer(6.dp)
+                        OutlinedTextField(
+                            value = port, onValueChange = { port = it.filter { c -> c.isDigit() }.take(5) }, singleLine = true,
+                            label = { Text("Pairing port (number after \":\" in the dialog)") }, modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
+                    }
+                    VSpacer(8.dp)
+                    Button(
+                        enabled = code.length == 6 && pairState != "pairing",
+                        onClick = { adb.pair(port.toIntOrNull(), code) { BridgeHub.audio.refresh() } },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp),
+                        shape = RoundedCornerShape(14.dp),
+                    ) { Text("Pair") }
+                }
+
+                if (paired && !ready) {
+                    VSpacer(10.dp)
                     Text(
-                        "فقط یک بار لازم است؛ بعد از خاموش و روشن شدن گوشی، SIMBridge خودش دوباره وصل می‌شود.",
+                        "Connection port: the number after \":\" under \"IP address & Port\" on the Wireless debugging screen.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (manual) {
-                        androidx.compose.material3.OutlinedTextField(
-                            value = code, onValueChange = { code = it.filter { c -> c.isDigit() }.take(6) }, singleLine = true,
-                            label = { Text("کد ۶ رقمی") },
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                        )
-                        androidx.compose.material3.OutlinedTextField(
-                            value = port, onValueChange = { port = it.filter { c -> c.isDigit() }.take(5) }, singleLine = true,
-                            label = { Text("پورت جفت‌سازی (عدد بعد از «:» در همان پنجره)") },
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                        )
-                        if (adb.paired) {
-                            Text(
-                                "اگر قبلاً جفت شده و فقط وصل نمی‌شود: عدد بعد از «:» در «IP address & Port» صفحه Wireless debugging را وارد کنید.",
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                androidx.compose.material3.OutlinedTextField(
-                                    value = connectPort, onValueChange = { connectPort = it.filter { c -> c.isDigit() }.take(5) },
-                                    singleLine = true, label = { Text("پورت اتصال") }, modifier = Modifier.weight(1f),
-                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                                )
-                                HSpacer(8.dp)
-                                FilledTonalButton(
-                                    enabled = connectPort.length >= 4,
-                                    onClick = { connectPort.toIntOrNull()?.let { p -> adb.connectToPort(p) { BridgeHub.audio.refresh() } } },
-                                ) { Text("اتصال") }
-                            }
+                    VSpacer(6.dp)
+                    OutlinedTextField(
+                        value = connectPort, onValueChange = { connectPort = it.filter { c -> c.isDigit() }.take(5) },
+                        singleLine = true, label = { Text("Connection port") }, modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                    VSpacer(8.dp)
+                    FilledTonalButton(
+                        enabled = connectPort.length >= 4 && state != "connecting",
+                        onClick = { connectPort.toIntOrNull()?.let { p -> adb.connectToPort(p) { BridgeHub.audio.refresh() } } },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
+                    ) { Text("Connect") }
+                }
+
+                message?.let {
+                    VSpacer(10.dp)
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+
+                VSpacer(16.dp)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    if (!ready) {
+                        TextButton(onClick = { manual = !manual }) { Text(if (manual) "Hide Manual Entry" else "Enter Manually") }
+                        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    }
+                    if (paired) {
+                        TextButton(onClick = { adb.forget(); BridgeHub.audio.refresh() }) {
+                            Text("Forget", color = MaterialTheme.colorScheme.error)
                         }
                     }
-                    if (state == "connecting") Text("در حال اتصال…", color = MaterialTheme.colorScheme.primary)
-                    message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                    Button(onClick = onClose, shape = RoundedCornerShape(14.dp)) { Text(if (ready) "Done" else "Close") }
                 }
             }
-        },
-        confirmButton = {
-            if (state == "ready") {
-                Button(onClick = onClose) { Text("بستن") }
-            } else if (manual) {
-                Button(
-                    enabled = code.length == 6,
-                    onClick = { adb.pair(port.toIntOrNull(), code) { BridgeHub.audio.refresh() } },
-                ) { Text("جفت کردن") }
-            } else {
-                Button(onClick = {
-                    app.simbridge.android.receivers.AdbPairNotifier.show(ctx)
-                    openDevSettings()
-                }) { Text("شروع") }
+        }
+    }
+}
+
+@Composable
+private fun Step(done: Boolean, title: String, detail: String?, action: String?, busy: Boolean = false, onAction: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+            when {
+                done -> Icon(Icons.Outlined.CheckCircle, null, tint = Brand.Good, modifier = Modifier.size(22.dp))
+                busy -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                else -> Icon(Icons.Outlined.RadioButtonUnchecked, null, tint = Brand.Muted, modifier = Modifier.size(22.dp))
             }
-        },
-        dismissButton = {
-            if (state != "ready") {
-                TextButton(onClick = { manual = !manual }) { Text(if (manual) "با اعلان" else "وارد کردن دستی") }
+        }
+        HSpacer(12.dp)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            if (!done && detail != null) {
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        },
-    )
+            if (action != null) {
+                FilledTonalButton(
+                    onClick = onAction,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(top = 8.dp).heightIn(min = 36.dp),
+                ) { Text(action, style = MaterialTheme.typography.labelLarge) }
+            }
+        }
+    }
 }

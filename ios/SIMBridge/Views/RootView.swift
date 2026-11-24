@@ -29,6 +29,7 @@ struct RootView: View {
         .animation(.easeInOut, value: model.pairing == nil)
         .fullScreenCover(isPresented: callScreenBinding) {
             CallScreen()
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .environmentObject(model)
                 .environment(\.layoutDirection, .leftToRight)
                 .environment(\.locale, Locale(identifier: "en_US"))

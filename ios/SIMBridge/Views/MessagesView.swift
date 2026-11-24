@@ -76,6 +76,8 @@ struct ThreadRow: View {
                     Text(Fmt.short(thread.date))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .fixedSize()
                 }
                 Text(thread.snippet)
                     .font(.subheadline)

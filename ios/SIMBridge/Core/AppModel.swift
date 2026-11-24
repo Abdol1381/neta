@@ -84,8 +84,19 @@ final class AppModel: ObservableObject {
 
     /// Back to the inaudible loop after call audio / a CallKit call released the audio session.
     private func resumeKeeper() {
-        guard keepConnected, pairing != nil || sipAccount?.isComplete == true, !listening, !callKit.hasCall, !sip.hasCall else { return }
+        guard keepConnected, pairing != nil || sipAccount?.isComplete == true, !listening, !callKit.hasCall, !sip.hasCall,
+              !TestHooks.isActive else { return }
+        // In the background the app has only seconds before iOS suspends it once audio stopped:
+        // hold a background task while the silent loop takes over again.
+        if !isForeground { beginBackgroundTask(seconds: 20) }
         keeper.resume()
+        for delay in [1.0, 3.0, 6.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.keepConnected, !self.keeper.isRunning, self.keeper.mayTouchSession() else { return }
+                dlog("keeper: retry after call audio")
+                self.keeper.start()
+            }
+        }
     }
 
     /// Starts the background keeper unless a call's audio session is in use.
@@ -416,6 +427,8 @@ final class AppModel: ObservableObject {
     private func handleWake() {
         guard pairing != nil, !isForeground else { return }
         beginBackgroundTask(seconds: 25)
+        dlog("bluetooth wake")
+        if keepConnected && !keeper.isRunning { startKeeperIfIdle() }
         client.autoReconnect = true
         client.ensureReady(timeout: 15) { [weak self] ok in
             guard let self else { return }
@@ -545,6 +558,7 @@ final class AppModel: ObservableObject {
         }
         if c.state != "ringing" { Notifier.removeIncomingCall() }
         if c.state == "offhook" && prev.state == "idle" { callScreenMinimized = false }
+        if c.state != "offhook" { listenOffByUser = false }
         if c.state == "offhook" && prev.state != "offhook" && autoListen && canListen && !listening {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self, self.call.state == "offhook", !self.listening else { return }
@@ -794,12 +808,25 @@ final class AppModel: ObservableObject {
             client.request("listen", ["on": true], timeout: 25) { _ in }
         }
         if call.isIdle { audioRetries = 0 }
+        // Auto-play: also when the Android side became ready after the call had started.
+        if call.isIdle { autoListenTries = 0 }
+        if autoListen && canListen && !listening && !listenOffByUser && call.state == "offhook" && conn.isReady
+            && Date().timeIntervalSince(lastAutoListen) > 8 && autoListenTries < 2 {
+            lastAutoListen = Date()
+            autoListenTries += 1
+            dlog("watchdog: auto-play call audio")
+            setListening(true)
+        }
     }
+    private var listenOffByUser = false
+    private var lastAutoListen = Date.distantPast
+    private var autoListenTries = 0
 
     // MARK: - Listen on iPhone
 
     func setListening(_ on: Bool) {
         dlog("listen \(on ? "on" : "off")")
+        if !on && call.state == "offhook" { listenOffByUser = true }
         if on {
             lastAudioAt = Date()
             if callKit.hasCall && callKit.answeredHere {

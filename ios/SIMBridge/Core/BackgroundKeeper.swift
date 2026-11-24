@@ -37,7 +37,7 @@ final class BackgroundKeeper {
         if player == nil {
             player = try? AVAudioPlayer(data: Self.silentWav)
             player?.numberOfLoops = -1
-            player?.volume = 0
+            player?.volume = 1 // the data is pure silence; a muted player may count as idle
             player?.prepareToPlay()
         }
         if player?.isPlaying != true { player?.play() }
@@ -46,7 +46,6 @@ final class BackgroundKeeper {
 
     /// Re-applies the session and continues the loop (e.g. after the call audio session ended).
     func resume() {
-        guard player != nil else { return }
         start()
     }
 

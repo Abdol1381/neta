@@ -24,14 +24,14 @@ object Notifications {
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
-            NotificationChannel(CH_SERVICE, "سرویس پل سیم‌کارت", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "وضعیت اتصال با آیفون"
+            NotificationChannel(CH_SERVICE, "SIMBridge service", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Connection status with the iPhone"
                 setShowBadge(false)
             }
         )
         nm.createNotificationChannel(
-            NotificationChannel(CH_PAIRING, "درخواست اتصال", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "تأیید اتصال آیفون جدید"
+            NotificationChannel(CH_PAIRING, "Connection requests", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Approve a new iPhone"
             }
         )
     }
@@ -44,7 +44,7 @@ object Notifications {
     fun service(context: Context, text: String): Notification =
         NotificationCompat.Builder(context, CH_SERVICE)
             .setSmallIcon(R.drawable.ic_stat_bridge)
-            .setContentTitle("SIMBridge فعال است")
+            .setContentTitle("SIMBridge is running")
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -68,15 +68,15 @@ object PairingNotifier {
         )
         val n = NotificationCompat.Builder(context, Notifications.CH_PAIRING)
             .setSmallIcon(R.drawable.ic_stat_bridge)
-            .setContentTitle("«⁨${req.name}⁩» می‌خواهد متصل شود")
-            .setContentText("کد تأیید: ${req.code} — فقط اگر همین کد روی آیفون نمایش داده شده تأیید کنید.")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("کد تأیید: ${req.code}\nفقط اگر همین کد روی آیفون نمایش داده شده تأیید کنید."))
+            .setContentTitle("\"${req.name}\" wants to connect")
+            .setContentText("Code ${req.code} — approve only if the iPhone shows the same code.")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("Code: ${req.code}\nApprove only if the iPhone shows the same code."))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
             .setAutoCancel(true)
             .setContentIntent(Notifications.openApp(context))
-            .addAction(0, "تأیید", action(true))
-            .addAction(0, "رد", action(false))
+            .addAction(0, "Approve", action(true))
+            .addAction(0, "Decline", action(false))
             .build()
         try { NotificationManagerCompat.from(context).notify(Notifications.ID_PAIRING, n) } catch (_: SecurityException) {}
     }

@@ -40,6 +40,7 @@ struct SIMBridgeApp: App {
                 .environmentObject(model)
                 .environment(\.layoutDirection, .leftToRight)
                 .environment(\.locale, Locale(identifier: "en_US"))
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .onChange(of: phase) { p in
                     switch p {
                     case .active: model.enterForeground()

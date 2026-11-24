@@ -80,7 +80,7 @@ class BridgeServer(port: Int, private val handler: RequestHandler) :
 
     override fun onClose(conn: WebSocket, code: Int, reason: String?, remote: Boolean) {
         val s = sessions.remove(conn) ?: return
-        if (s.phase == Phase.READY) BridgeHub.log("iPhone «${s.name}» disconnected (code $code${if (remote) ", by iPhone" else ""})")
+        if (s.phase == Phase.READY) BridgeHub.log("iPhone \"${s.name}\" disconnected (code $code${if (remote) ", by iPhone" else ""})")
         val wasApproval = s.phase == Phase.APPROVAL
         s.phase = Phase.CLOSED
         if (wasApproval && BridgeHub.pendingApproval.value?.connId == s.connId) {
@@ -153,7 +153,7 @@ class BridgeServer(port: Int, private val handler: RequestHandler) :
             PairingNotifier.show(BridgeHub.appContext, req)
         } else {
             s.phase = Phase.READY
-            BridgeHub.log("iPhone «${s.name}» connected from ${conn.remoteSocketAddress?.address?.hostAddress}")
+            BridgeHub.log("iPhone \"${s.name}\" connected from ${conn.remoteSocketAddress?.address?.hostAddress}")
             BridgeHub.trust.touch(s.deviceId, s.name)
             BridgeHub.refreshDevices()
             send(conn, s, JSONObject().apply {

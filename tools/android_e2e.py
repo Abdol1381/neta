@@ -212,7 +212,7 @@ def wait_bridge(timeout=40):
 def pair():
     """Pairs like the iPhone does. Returns (device_id, device_key, server_id)."""
     lines_before = len(logcat_test_lines())
-    tapped = tap_text("اتصال آیفون")
+    tapped = tap_text("Connect iPhone")
     time.sleep(2)
     if tapped:
         screenshot("02_pair_qr")
