@@ -38,8 +38,9 @@ jobs:
       - name: Build
         working-directory: ios
         run: |
-          xcodebuild -project SIMBridge.xcodeproj -target SIMBridge \
-            -configuration Release -sdk iphoneos \
+          xcodebuild -project SIMBridge.xcodeproj -scheme SIMBridge \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build/dd -skipPackagePluginValidation -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build > build.log 2>&1 || true
           grep -E "error:|warning:" build.log | sort -u | head -80 || true
@@ -59,7 +60,7 @@ jobs:
       - name: Package IPA
         working-directory: ios
         run: |
-          APP="build/Release-iphoneos/SIMBridge.app"
+          APP="build/dd/Build/Products/Release-iphoneos/SIMBridge.app"
           test -d "$APP"
           rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
           zip -qry SIMBridge-unsigned.ipa Payload

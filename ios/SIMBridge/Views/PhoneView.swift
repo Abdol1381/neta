@@ -29,6 +29,7 @@ struct KeypadView: View {
     /// Set by a long press so the button tap that follows on finger-up is ignored.
     @State private var suppressTap = false
     @State private var subId: Int?
+    @State private var useVoip = false
 
     private struct Key: Identifiable {
         let digit: String
@@ -90,12 +91,12 @@ struct KeypadView: View {
 
                 HStack(spacing: gap * 1.3) {
                     Group {
-                        if model.sims.count > 1 { SimPicker(subId: $subId) } else { Color.clear }
+                        if model.sims.count > 1 || model.sipState == "ok" { SimPicker(subId: $subId, voip: $useVoip) } else { Color.clear }
                     }
                     .frame(width: key, height: key)
 
                     Button {
-                        model.dial(number, subId: subId)
+                        if useVoip && !AppModel.isUssd(number) { model.dialVoip(number) } else { model.dial(number, subId: subId) }
                     } label: {
                         Image(systemName: "phone.fill")
                             .font(.system(size: key * 0.36))
@@ -134,7 +135,11 @@ struct KeypadView: View {
         }
     }
 
-    private var canCall: Bool { model.conn.isReady && number.contains(where: { $0.isNumber }) && model.call.isIdle }
+    private var canCall: Bool {
+        guard number.contains(where: { $0.isNumber }) else { return false }
+        if useVoip { return model.sipState == "ok" }
+        return model.conn.isReady && model.call.isIdle
+    }
 }
 
 struct RecentsView: View {

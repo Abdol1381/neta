@@ -27,6 +27,20 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        VoipSettingsView()
+                    } label: {
+                        HStack {
+                            Label("خط تلفن اینترنتی", systemImage: "phone.connection")
+                            Spacer()
+                            Text(sipText).foregroundStyle(model.sipState == "ok" ? Theme.good : .secondary)
+                        }
+                    }
+                } footer: {
+                    Text("برای صحبت کامل دوطرفه روی آیفون: تماس‌های سیم‌کارت به یک خط تلفن اینترنتی منتقل می‌شوند و همین‌جا جواب داده می‌شوند.")
+                }
+
+                Section {
                     HStack {
                         Label("مخاطبین آیفون", systemImage: "person.crop.circle.badge.checkmark")
                         Spacer()
@@ -123,6 +137,15 @@ struct SettingsView: View {
             } message: {
                 Text("برای اتصال دوباره باید QR جدید اسکن کنید. در گوشی اندروید هم می‌توانید این آیفون را از فهرست حذف کنید.")
             }
+        }
+    }
+
+    private var sipText: String {
+        switch model.sipState {
+        case "ok": return "وصل"
+        case "registering": return "در حال اتصال…"
+        case "failed": return "خطا"
+        default: return model.sipAccount == nil ? "تنظیم نشده" : "قطع"
         }
     }
 

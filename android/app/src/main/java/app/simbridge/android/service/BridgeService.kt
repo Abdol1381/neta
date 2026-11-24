@@ -231,6 +231,11 @@ class BridgeService : Service() {
                 }
             }
             "ussd" -> JSONObject().put("text", calls.ussd(req.optString("code"), req.optInt("subId", -1).takeIf { it >= 0 }))
+            "forward" -> {
+                calls.forward(req.optString("mode"), req.optString("number"), req.optInt("subId", -1).takeIf { it >= 0 })
+                JSONObject().put("forwarding", calls.forwardingState())
+            }
+            "forward_state" -> JSONObject().put("forwarding", calls.forwardingState())
             "contacts" -> JSONObject().put("contacts", contacts.all())
             else -> throw BridgeError("unknown_request")
         }

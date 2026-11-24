@@ -152,6 +152,47 @@ class CallController(private val context: Context, private val contacts: Contact
      * Runs a USSD code (e.g. *140#) on the chosen SIM and returns the operator's reply.
      * Blocks the calling worker thread up to 40 s.
      */
+    /**
+     * Operator call forwarding (GSM supplementary-service codes), placed on the chosen SIM like the
+     * dialer does: "all" = **21*N# (every call), "noanswer" = **61*N#, "busy" = **67*N#,
+     * "unreachable" = **62*N#, "conditional" = **004*N# (busy/no answer/unreachable), "off" = ##002#.
+     * The network's confirmation appears on the Android screen; the chosen mode is remembered.
+     */
+    fun forward(mode: String, rawNumber: String, subId: Int?) {
+        need(Manifest.permission.CALL_PHONE)
+        if (BridgeHub.call.value.state != "idle") throw BridgeError("busy")
+        val number = rawNumber.filter { it.isDigit() || it == '+' }
+        val code = when (mode) {
+            "off" -> "##002#"
+            "all" -> "**21*$number#"
+            "noanswer" -> "**61*$number#"
+            "busy" -> "**67*$number#"
+            "unreachable" -> "**62*$number#"
+            "conditional" -> "**004*$number#"
+            else -> throw BridgeError("bad_request")
+        }
+        if (mode != "off" && number.count { it.isDigit() } < 5) throw BridgeError("bad_request")
+        val extras = Bundle()
+        accountFor(subId)?.let { extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it) }
+        try {
+            telecom?.placeCall(Uri.fromParts("tel", code, null), extras) ?: throw BridgeError("unsupported")
+        } catch (e: SecurityException) {
+            throw BridgeError("permission_denied")
+        }
+        val key = "fwd_" + (subId ?: SubscriptionManager.getDefaultVoiceSubscriptionId())
+        context.getSharedPreferences("forwarding", Context.MODE_PRIVATE).edit()
+            .putString(key, if (mode == "off") "off" else "$mode:$number").apply()
+    }
+
+    /** Last forwarding mode set from the app, per SIM ("off" or "mode:number"). */
+    fun forwardingState(): JSONObject {
+        val out = JSONObject()
+        context.getSharedPreferences("forwarding", Context.MODE_PRIVATE).all.forEach { (k, v) ->
+            if (k.startsWith("fwd_")) out.put(k.removePrefix("fwd_"), v.toString())
+        }
+        return out
+    }
+
     fun ussd(raw: String, subId: Int?): String {
         need(Manifest.permission.CALL_PHONE)
         val code = raw.filter { it.isDigit() || it == '*' || it == '#' }

@@ -13,9 +13,10 @@ echo "# iOS Simulator UI test" > "$OUT/report.md"
 
 cd "$ROOT/ios"
 xcodegen generate >/dev/null
-xcodebuild -project SIMBridge.xcodeproj -target SIMBridge -configuration Debug -sdk iphonesimulator \
+xcodebuild -project SIMBridge.xcodeproj -scheme SIMBridge -configuration Debug -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd -skipPackagePluginValidation -skipMacroValidation \
   CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=NO build > "$OUT/build.log" 2>&1
-APP="$ROOT/ios/build/Debug-iphonesimulator/SIMBridge.app"
+APP="$ROOT/ios/build/dd/Build/Products/Debug-iphonesimulator/SIMBridge.app"
 if [ -d "$APP" ]; then pass "Debug simulator build"; else fail "Debug simulator build"; grep -E "error:" "$OUT/build.log" | head -40; exit 1; fi
 
 UDID=$(xcrun simctl list devices available -j | python3 -c '

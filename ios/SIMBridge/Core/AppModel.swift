@@ -47,6 +47,15 @@ final class AppModel: ObservableObject {
     let audioPlayer = CallAudioPlayer()
     let callKit = CallKitManager()
     let keeper = BackgroundKeeper()
+    /// Internet phone line (SIP). Forwarded SIM calls ring here with two-way audio on the iPhone.
+    let sip = SipPhone()
+    @Published private(set) var sipState = "off"          // off / registering / ok / failed
+    @Published private(set) var sipMessage = ""
+    @Published private(set) var sipAccount: SipAccount? = SipAccountStore.load()
+    /// subId (string) -> forwarding mode set from this iPhone ("off", "all", "conditional")
+    @Published private(set) var forwarding: [String: String] = {
+        (UserDefaults.standard.dictionary(forKey: "forwarding") as? [String: String]) ?? [:]
+    }()
     /// Stay connected in the background (inaudible audio loop) so calls/SMS arrive instantly.
     @Published var keepConnected: Bool = UserDefaults.standard.object(forKey: "keepConnected") as? Bool ?? true {
         didSet {
@@ -58,13 +67,14 @@ final class AppModel: ObservableObject {
 
     /// Back to the inaudible loop after call audio / a CallKit call released the audio session.
     private func resumeKeeper() {
-        guard keepConnected, pairing != nil, !listening, !callKit.hasCall else { return }
+        guard keepConnected, pairing != nil || sipAccount?.isComplete == true, !listening, !callKit.hasCall, !sip.hasCall else { return }
         keeper.resume()
     }
 
     /// Starts the background keeper unless a call's audio session is in use.
     private func startKeeperIfIdle() {
-        guard keepConnected, pairing != nil, !TestHooks.isActive, !listening, !callKit.hasCall else { return }
+        guard keepConnected, pairing != nil || sipAccount?.isComplete == true, !TestHooks.isActive, !listening,
+              !callKit.hasCall, !sip.hasCall else { return }
         keeper.start()
     }
     /// Ring with the iPhone's own call screen (CallKit).
@@ -104,6 +114,57 @@ final class AppModel: ObservableObject {
         ble.onConnectedChange = { [weak self] c in self?.bleConnected = c }
         iphoneContacts.onChange = { [weak self] in self?.contactsChanged() }
         setupCallKit()
+        sip.onChange = { [weak self] in
+            guard let self else { return }
+            self.sipState = self.sip.registration
+            self.sipMessage = self.sip.registrationMessage
+        }
+        sip.onCallActiveChanged = { [weak self] active in
+            guard let self else { return }
+            // The silent loop keeps running during the call (mixable); afterwards restore its session.
+            if !active { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.resumeKeeper() } }
+        }
+    }
+
+    // MARK: - Internet phone line (SIP) + operator call forwarding
+
+    func saveSipAccount(_ acc: SipAccount?) {
+        SipAccountStore.save(acc)
+        sipAccount = acc
+        sip.configure(acc)
+    }
+
+    /// Asks the Android phone to set the operator's call forwarding for a SIM to the VoIP line.
+    /// mode: "all" (every call rings on the iPhone), "conditional" (only when the Android phone does
+    /// not answer / is busy / unreachable) or "off".
+    func setForwarding(subId: Int?, mode: String, _ done: ((Bool) -> Void)? = nil) {
+        let number = sipAccount?.lineNumber ?? ""
+        if mode != "off" && number.filter(\.isNumber).count < 5 {
+            toast = "اول شماره خط تلفن اینترنتی را در تنظیمات خط وارد کنید"
+            done?(false)
+            return
+        }
+        var params: [String: Any] = ["mode": mode, "number": number]
+        if let subId { params["subId"] = subId }
+        client.request("forward", params) { [weak self] r in
+            guard let self else { return }
+            switch r {
+            case .success:
+                self.forwarding[String(subId ?? -1)] = mode
+                UserDefaults.standard.set(self.forwarding, forKey: "forwarding")
+                self.toast = mode == "off" ? "انتقال تماس لغو شد (تأیید اپراتور روی گوشی اندروید نمایش داده می‌شود)"
+                                           : "انتقال تماس درخواست شد (تأیید اپراتور روی گوشی اندروید نمایش داده می‌شود)"
+                done?(true)
+            case .failure(let e):
+                self.report(e)
+                done?(false)
+            }
+        }
+    }
+
+    /// Outgoing call through the internet line.
+    func dialVoip(_ number: String) {
+        if !sip.startCall(number) { toast = "خط تلفن اینترنتی وصل نیست" }
     }
 
     private func setupCallKit() {
@@ -134,6 +195,7 @@ final class AppModel: ObservableObject {
     func launch() {
         Notifier.setup()
         iphoneContacts.reload()
+        if !TestHooks.isActive { sip.configure(sipAccount) }
         // iOS may relaunch the app in the background (Bluetooth state restoration). In that case stay
         // quiet: the BLE wake handler opens the connection only for as long as it is needed.
         isForeground = UIApplication.shared.applicationState != .background
@@ -158,6 +220,7 @@ final class AppModel: ObservableObject {
 
     func enterForeground() {
         isForeground = true
+        sip.refreshRegistration()
         startKeeperIfIdle()
         client.autoReconnect = true
         endBackgroundTask()

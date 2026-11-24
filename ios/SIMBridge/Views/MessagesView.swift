@@ -235,8 +235,11 @@ struct SimPicker: View {
     @Binding var subId: Int?
     /// When given, the menu also offers sending through the iPhone's own iMessage.
     var iMessage: Binding<Bool>? = nil
+    /// When given (and the internet line is connected), the menu also offers calling through it.
+    var voip: Binding<Bool>? = nil
 
     private var usingIMessage: Bool { iMessage?.wrappedValue == true }
+    private var usingVoip: Bool { voip?.wrappedValue == true }
 
     var body: some View {
         Menu {
@@ -244,9 +247,18 @@ struct SimPicker: View {
                 Button {
                     subId = s.subId
                     iMessage?.wrappedValue = false
+                    voip?.wrappedValue = false
                 } label: {
                     Label("سیم \(Fmt.persianDigits(String(s.slot + 1))) — \(s.title)",
-                          systemImage: !usingIMessage && subId == s.subId ? "checkmark" : "simcard")
+                          systemImage: !usingIMessage && !usingVoip && subId == s.subId ? "checkmark" : "simcard")
+                }
+            }
+            if let voip, model.sipState == "ok" {
+                Divider()
+                Button {
+                    voip.wrappedValue = true
+                } label: {
+                    Label("خط اینترنتی (صحبت روی آیفون)", systemImage: usingVoip ? "checkmark" : "phone.connection")
                 }
             }
             if let iMessage, MessageComposer.available {
@@ -259,7 +271,13 @@ struct SimPicker: View {
             }
         } label: {
             Group {
-                if usingIMessage {
+                if usingVoip {
+                    HStack(spacing: 4) {
+                        Image(systemName: "phone.connection")
+                        Text("VoIP").font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(Theme.good)
+                } else if usingIMessage {
                     HStack(spacing: 4) {
                         Image(systemName: "message.fill")
                         Text("iMessage").font(.caption.weight(.bold))
