@@ -20,24 +20,15 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Date;
-import java.util.Random;
+import java.math.BigInteger;
 
 import io.github.muntashirakon.adb.AbsAdbConnectionManager;
-import sun.security.x509.AlgorithmId;
-import sun.security.x509.CertificateAlgorithmId;
-import sun.security.x509.CertificateExtensions;
-import sun.security.x509.CertificateIssuerName;
-import sun.security.x509.CertificateSerialNumber;
-import sun.security.x509.CertificateSubjectName;
-import sun.security.x509.CertificateValidity;
-import sun.security.x509.CertificateVersion;
-import sun.security.x509.CertificateX509Key;
-import sun.security.x509.KeyIdentifier;
-import sun.security.x509.PrivateKeyUsageExtension;
-import sun.security.x509.SubjectKeyIdentifierExtension;
-import sun.security.x509.X500Name;
-import sun.security.x509.X509CertImpl;
-import sun.security.x509.X509CertInfo;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 /**
  * Client for the phone's own adbd (Wireless debugging), so the app gets shell privileges without
@@ -79,26 +70,13 @@ public final class AdbManager extends AbsAdbConnectionManager {
             KeyPair pair = gen.generateKeyPair();
             PublicKey publicKey = pair.getPublic();
             key = pair.getPrivate();
-            String algorithm = "SHA512withRSA";
-            Date notBefore = new Date();
+            Date notBefore = new Date(System.currentTimeMillis() - 86400000L);
             Date notAfter = new Date(System.currentTimeMillis() + 3650L * 86400000L); // 10 years
-            CertificateExtensions extensions = new CertificateExtensions();
-            extensions.set("SubjectKeyIdentifier",
-                    new SubjectKeyIdentifierExtension(new KeyIdentifier(publicKey).getIdentifier()));
-            extensions.set("PrivateKeyUsage", new PrivateKeyUsageExtension(notBefore, notAfter));
             X500Name name = new X500Name("CN=SIMBridge");
-            X509CertInfo info = new X509CertInfo();
-            info.set("version", new CertificateVersion(2));
-            info.set("serialNumber", new CertificateSerialNumber(new Random().nextInt() & Integer.MAX_VALUE));
-            info.set("algorithmID", new CertificateAlgorithmId(AlgorithmId.get(algorithm)));
-            info.set("subject", new CertificateSubjectName(name));
-            info.set("key", new CertificateX509Key(publicKey));
-            info.set("validity", new CertificateValidity(notBefore, notAfter));
-            info.set("issuer", new CertificateIssuerName(name));
-            info.set("extensions", extensions);
-            X509CertImpl impl = new X509CertImpl(info);
-            impl.sign(key, algorithm);
-            cert = impl;
+            X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
+                    name, BigInteger.valueOf(System.currentTimeMillis()), notBefore, notAfter, name, publicKey);
+            ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").build(key);
+            cert = new JcaX509CertificateConverter().getCertificate(builder.build(signer));
             write(keyFile, key.getEncoded());
             write(certFile, cert.getEncoded());
         }
