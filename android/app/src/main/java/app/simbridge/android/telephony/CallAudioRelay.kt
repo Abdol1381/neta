@@ -4,25 +4,29 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import app.simbridge.android.shell.BuiltInAdb
+import app.simbridge.android.shell.ShellProc
 import kotlinx.coroutines.flow.MutableStateFlow
 import rikka.shizuku.Shizuku
+import java.io.File
 import java.io.InputStream
 import kotlin.random.Random
 
 /**
- * "Listen on iPhone" (developer mode). With Shizuku running (ADB / wireless-debugging privileges,
- * no root) the bundled scrcpy server captures the call downlink — the other party's voice — as the
- * shell user. Audio arrives as 48 kHz stereo s16le and is reduced here to 16 kHz mono s16le in
- * 20 ms chunks (640 bytes) before going to the iPhone.
+ * "Listen on iPhone" (developer mode, no root). Shell privileges come from the built-in Wireless
+ * debugging client ([BuiltInAdb], preferred) or from Shizuku. As the shell user, the bundled scrcpy
+ * server (Apache-2.0) captures the call downlink — the other party's voice — as 48 kHz stereo
+ * s16le, reduced here to 16 kHz mono s16le in 20 ms chunks (640 bytes) for the iPhone.
  *
  * Android offers no way to inject audio into the call uplink without root, so the user still
  * speaks to the Android phone (or a headset paired with it).
  */
 class CallAudioRelay(private val context: Context) {
-    /** unsupported / no_shizuku / no_permission / ready */
-    val state = MutableStateFlow("no_shizuku")
+    /** ready / no_permission (Shizuku) / adb_offline / not_set_up / unsupported */
+    val state = MutableStateFlow("not_set_up")
+    val adb = BuiltInAdb(context)
 
-    @Volatile private var process: Process? = null
+    @Volatile private var process: ShellProc? = null
     @Volatile private var scid: String? = null
     private var installedVersion = -1L
     private val lock = Any()
@@ -32,7 +36,7 @@ class CallAudioRelay(private val context: Context) {
     var onStateChanged: (() -> Unit)? = null
 
     private val binderListener = Shizuku.OnBinderReceivedListener { refresh() }
-    private val deadListener = Shizuku.OnBinderDeadListener { refresh(); stop("shizuku_stopped") }
+    private val deadListener = Shizuku.OnBinderDeadListener { refresh() }
     private val permListener = Shizuku.OnRequestPermissionResultListener { _, _ -> refresh() }
 
     fun init() {
@@ -43,7 +47,9 @@ class CallAudioRelay(private val context: Context) {
         } catch (e: Throwable) {
             Log.w(TAG, "shizuku listeners", e)
         }
+        adb.onStateChanged = { refresh() }
         refresh()
+        adb.connectAsync()
     }
 
     fun refresh() {
@@ -54,19 +60,24 @@ class CallAudioRelay(private val context: Context) {
         }
     }
 
-    private fun binderAlive() = try { Shizuku.pingBinder() } catch (e: Throwable) { false }
+    private fun shizukuAlive() = try { Shizuku.pingBinder() } catch (e: Throwable) { false }
+
+    private fun shizukuReady(): Boolean = shizukuAlive() &&
+        !(try { Shizuku.isPreV11() } catch (e: Throwable) { true }) &&
+        (try { Shizuku.checkSelfPermission() } catch (e: Throwable) { -1 }) == PackageManager.PERMISSION_GRANTED
 
     private fun computeState(): String = when {
         Build.VERSION.SDK_INT < 30 -> "unsupported"
-        !binderAlive() -> "no_shizuku"
-        try { Shizuku.isPreV11() } catch (e: Throwable) { true } -> "unsupported"
-        (try { Shizuku.checkSelfPermission() } catch (e: Throwable) { -1 }) != PackageManager.PERMISSION_GRANTED -> "no_permission"
-        else -> "ready"
+        adb.state.value == "ready" -> "ready"
+        shizukuReady() -> "ready"
+        shizukuAlive() -> "no_permission"
+        adb.paired -> "adb_offline"
+        else -> "not_set_up"
     }
 
-    fun requestPermission() {
+    fun requestShizukuPermission() {
         try {
-            if (binderAlive() && Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+            if (shizukuAlive() && Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
                 Shizuku.requestPermission(REQUEST_CODE)
             }
         } catch (e: Throwable) {
@@ -74,23 +85,41 @@ class CallAudioRelay(private val context: Context) {
         }
     }
 
-    /** Runs a shell command as the shell user through Shizuku. */
-    private fun exec(cmd: String): Process {
-        val m = Shizuku::class.java.getDeclaredMethod(
-            "newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java,
-        )
-        m.isAccessible = true
-        return m.invoke(null, arrayOf("sh", "-c", cmd), null, null) as Process
+    /** Runs a shell command as the shell user: built-in Wireless debugging first, then Shizuku. */
+    private fun exec(cmd: String): ShellProc {
+        if (adb.paired && (adb.ready || adb.connectBlocking())) return adb.exec(cmd)
+        if (shizukuReady()) {
+            val m = Shizuku::class.java.getDeclaredMethod(
+                "newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java,
+            )
+            m.isAccessible = true
+            val p = m.invoke(null, arrayOf("sh", "-c", cmd), null, null) as Process
+            return object : ShellProc {
+                override val input: InputStream = p.inputStream
+                override fun destroy() { try { p.destroy() } catch (_: Throwable) {} }
+            }
+        }
+        throw IllegalStateException(state.value)
     }
 
+    private fun runToEnd(cmd: String) {
+        val p = exec(cmd)
+        val t = Thread { try { p.input.readBytes() } catch (_: Throwable) {} }
+        t.start()
+        t.join(15_000)
+        p.destroy()
+    }
+
+    /** Copies the scrcpy server to /data/local/tmp (shell can read the app's external files dir). */
     private fun installServer() {
         val version = try {
             context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
         } catch (e: Exception) { 0L }
         if (version == installedVersion) return
-        val p = exec("cat > $JAR && chmod 644 $JAR")
-        p.outputStream.use { out -> context.assets.open("scrcpy-server.jar").use { it.copyTo(out) } }
-        if (p.waitFor() != 0) throw IllegalStateException("install failed")
+        val dir = context.getExternalFilesDir(null) ?: throw IllegalStateException("no external files dir")
+        val src = File(dir, "scrcpy-server.jar")
+        context.assets.open("scrcpy-server.jar").use { input -> src.outputStream().use { input.copyTo(it) } }
+        runToEnd("cp '${src.absolutePath}' $JAR && chmod 644 $JAR")
         installedVersion = version
     }
 
@@ -101,25 +130,26 @@ class CallAudioRelay(private val context: Context) {
     fun start(onPcm: (ByteArray) -> Unit, onEnd: (String?) -> Unit) {
         synchronized(lock) {
             if (process != null) return
+            refresh()
             if (state.value != "ready") throw IllegalStateException(state.value)
             installServer()
             val id = "%08x".format(Random.nextInt(0x10000000, 0x7fffffff))
             val p = exec(shellScript(id, context.applicationInfo.sourceDir))
             process = p
             scid = id
-            Thread({ pump(p, p.inputStream, onPcm, onEnd) }, "call-audio").start()
+            Thread({ pump(p, onPcm, onEnd) }, "call-audio").start()
         }
     }
 
-    private fun pump(p: Process, input: InputStream, onPcm: (ByteArray) -> Unit, onEnd: (String?) -> Unit) {
-        val reader = Downmixer(onPcm)
-        val inBuf = ByteArray(7680)
+    private fun pump(p: ShellProc, onPcm: (ByteArray) -> Unit, onEnd: (String?) -> Unit) {
+        val mixer = Downmixer(onPcm)
+        val buf = ByteArray(7680)
         var reason: String? = "ended"
         try {
             while (true) {
-                val n = input.read(inBuf, 0, inBuf.size)
+                val n = p.input.read(buf, 0, buf.size)
                 if (n <= 0) break
-                reader.feed(inBuf, n)
+                mixer.feed(buf, n)
             }
         } catch (e: Exception) {
             reason = "error"
@@ -129,7 +159,7 @@ class CallAudioRelay(private val context: Context) {
             if (process === p) { process = null; scid = null }
             requested
         }
-        try { p.destroy() } catch (_: Exception) {}
+        p.destroy()
         onEnd(if (stoppedOnRequest) null else reason)
     }
 
@@ -141,12 +171,10 @@ class CallAudioRelay(private val context: Context) {
             pair
         }
         if (p == null) return
-        try { p.destroy() } catch (_: Exception) {}
+        p.destroy()
         if (id != null) {
             // Make sure the background scrcpy server is gone too.
-            Thread {
-                try { exec("pkill -f 'scid=$id' 2>/dev/null; true").waitFor() } catch (_: Exception) {}
-            }.start()
+            Thread { try { runToEnd("pkill -f 'scid=$id'; true") } catch (_: Exception) {} }.start()
         }
         Log.i(TAG, "stopped ${reason ?: ""}")
     }

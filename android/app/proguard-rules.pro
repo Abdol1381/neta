@@ -7,3 +7,13 @@
 # Shizuku.newProcess is called by reflection
 -keep class rikka.shizuku.** { *; }
 -keep class moe.shizuku.** { *; }
+
+# Built-in wireless-debugging client
+-keep class io.github.muntashirakon.adb.** { *; }
+-keep class org.conscrypt.** { *; }
+-keep class sun.security.** { *; }
+-dontwarn org.conscrypt.**
+-dontwarn sun.security.**
+-dontwarn javax.naming.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**

@@ -32,6 +32,12 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
+    <!-- Granted to itself over Wireless debugging (never at install), so the app can switch
+         Wireless debugging back on after a reboot for the built-in call-audio mode. -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- Bluetooth LE wake channel for the iPhone app -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -84,6 +90,10 @@
 
         <receiver
             android:name=".receivers.PairingActionReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".receivers.AdbPairReceiver"
             android:exported="false" />
 
         <!-- Shizuku delivers its binder through this provider (developer-mode call audio). -->

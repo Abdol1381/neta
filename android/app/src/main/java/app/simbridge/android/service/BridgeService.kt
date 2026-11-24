@@ -146,7 +146,11 @@ class BridgeService : Service() {
     private fun watchNetwork() {
         val cm = getSystemService(ConnectivityManager::class.java) ?: return
         val cb = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { main.postDelayed({ nsd.register() }, 1500) }
+            override fun onAvailable(network: Network) {
+                main.postDelayed({ nsd.register() }, 1500)
+                // Wi-Fi back: re-attach the built-in Wireless debugging link for call audio.
+                main.postDelayed({ BridgeHub.audio.adb.connectAsync() }, 4000)
+            }
             override fun onLost(network: Network) { main.postDelayed({ nsd.register() }, 1500) }
         }
         try {

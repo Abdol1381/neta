@@ -153,6 +153,7 @@ fun HomeScreen() {
     val resumeTick = rememberResumeTick()
     var showPair by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf<String?>(null) }
+    var showAdbSetup by remember { mutableStateOf(false) }
 
     val missing = remember(permTick, resumeTick) { Perms.groups.filterNot { Perms.groupGranted(ctx, it) } }
     val batteryExempt = remember(resumeTick) {
@@ -352,6 +353,7 @@ fun HomeScreen() {
         item { SectionLabel("شنیدن تماس روی آیفون") }
         item {
             Card(padding = 12.dp) {
+                val adbState by BridgeHub.audio.adb.state.collectAsStateWithLifecycle()
                 when (devAudio) {
                     "ready" -> InfoRow(
                         icon = Icons.Outlined.Hearing,
@@ -359,14 +361,26 @@ fun HomeScreen() {
                         subtitle = "صدای طرف مقابل روی آیفون پخش می‌شود. برای صحبت، با همین گوشی یا هدست بلوتوثِ وصل به آن صحبت کنید.",
                         tint = Brand.Good,
                     )
-                    "no_permission" -> InfoRow(
+                    "adb_offline" -> InfoRow(
                         icon = Icons.Outlined.Hearing,
-                        title = "اجازه Shizuku لازم است",
-                        subtitle = "Shizuku فعال است؛ به SIMBridge اجازه بدهید.",
+                        title = if (adbState == "connecting") "در حال اتصال…" else "اتصال برقرار نیست",
+                        subtitle = "گوشی را به Wi-Fi وصل کنید و «اشکال‌زدایی بی‌سیم» روشن باشد. اتصال خودکار انجام می‌شود.",
                         tint = Brand.Fair,
                     ) {
                         FilledTonalButton(
-                            onClick = { BridgeHub.audio.requestPermission() },
+                            onClick = { showAdbSetup = true; BridgeHub.audio.adb.connectAsync() },
+                            contentPadding = PaddingValues(horizontal = 14.dp),
+                            modifier = Modifier.height(34.dp),
+                        ) { Text("اتصال", style = MaterialTheme.typography.labelLarge) }
+                    }
+                    "no_permission" -> InfoRow(
+                        icon = Icons.Outlined.Hearing,
+                        title = "اجازه Shizuku لازم است",
+                        subtitle = "Shizuku فعال است؛ به SIMBridge اجازه بدهید (یا از «راه‌اندازی» داخلی استفاده کنید).",
+                        tint = Brand.Fair,
+                    ) {
+                        FilledTonalButton(
+                            onClick = { BridgeHub.audio.requestShizukuPermission() },
                             contentPadding = PaddingValues(horizontal = 14.dp),
                             modifier = Modifier.height(34.dp),
                         ) { Text("اجازه", style = MaterialTheme.typography.labelLarge) }
@@ -379,19 +393,15 @@ fun HomeScreen() {
                     )
                     else -> InfoRow(
                         icon = Icons.Outlined.Hearing,
-                        title = "اختیاری · حالت توسعه‌دهنده",
-                        subtitle = "با نصب اپ Shizuku و روشن کردن آن از «اشکال‌زدایی بی‌سیم»، صدای طرف مقابل تماس روی آیفون پخش می‌شود (بدون روت).",
+                        title = "اختیاری · بدون روت",
+                        subtitle = "یک بار با «اشکال‌زدایی بی‌سیم» جفت کنید تا صدای طرف مقابل تماس روی آیفون پخش شود. بعد از آن خودکار است.",
                         tint = Brand.Muted,
                     ) {
                         FilledTonalButton(
-                            onClick = {
-                                try {
-                                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/guide/setup/")))
-                                } catch (_: Exception) {}
-                            },
+                            onClick = { showAdbSetup = true },
                             contentPadding = PaddingValues(horizontal = 14.dp),
                             modifier = Modifier.height(34.dp),
-                        ) { Text("راهنما", style = MaterialTheme.typography.labelLarge) }
+                        ) { Text("راه‌اندازی", style = MaterialTheme.typography.labelLarge) }
                     }
                 }
             }
@@ -438,6 +448,8 @@ fun HomeScreen() {
             dismissButton = { TextButton(onClick = { BridgeHub.resolvePairing(false) }) { Text("رد") } },
         )
     }
+
+    if (showAdbSetup) AdbSetupDialog(onClose = { showAdbSetup = false })
 
     confirmRemove?.let { id ->
         AlertDialog(
@@ -605,4 +617,82 @@ private fun PairDialog(onClose: () -> Unit) {
             }
         }
     }
+}
+
+/** One-time pairing with the phone's own Wireless debugging (built-in replacement for Shizuku). */
+@Composable
+private fun AdbSetupDialog(onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    val adb = BridgeHub.audio.adb
+    val state by adb.state.collectAsStateWithLifecycle()
+    val message by adb.message.collectAsStateWithLifecycle()
+    var port by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
+    var manual by remember { mutableStateOf(false) }
+
+    fun openDevSettings() {
+        try {
+            ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: Exception) {
+            ctx.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("راه‌اندازی شنیدن تماس", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (state == "ready") {
+                    Text("✓ آماده است. صدای طرف مقابل در تماس‌ها روی آیفون پخش می‌شود.", color = Brand.Good)
+                } else {
+                    Text(
+                        "۱. حالت توسعه‌دهنده: تنظیمات ← درباره تلفن ← ۷ بار روی «Build number».\n" +
+                            "۲. گوشی به Wi-Fi وصل باشد. در «گزینه‌های توسعه‌دهنده»، «اشکال‌زدایی بی‌سیم» (Wireless debugging) را روشن کنید.\n" +
+                            "۳. داخل آن، «Pair device with pairing code» را بزنید.\n" +
+                            "۴. اعلان «جفت‌سازی SIMBridge» را پایین بکشید و کد ۶ رقمی را وارد کنید.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "فقط یک بار لازم است؛ بعد از خاموش و روشن شدن گوشی، SIMBridge خودش دوباره وصل می‌شود.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (manual) {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = code, onValueChange = { code = it.filter { c -> c.isDigit() }.take(6) }, singleLine = true,
+                            label = { Text("کد ۶ رقمی") },
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                        )
+                        androidx.compose.material3.OutlinedTextField(
+                            value = port, onValueChange = { port = it.filter { c -> c.isDigit() }.take(5) }, singleLine = true,
+                            label = { Text("پورت (اختیاری، عدد بعد از «:»)") },
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                        )
+                    }
+                    if (state == "connecting") Text("در حال اتصال…", color = MaterialTheme.colorScheme.primary)
+                    message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+        },
+        confirmButton = {
+            if (state == "ready") {
+                Button(onClick = onClose) { Text("بستن") }
+            } else if (manual) {
+                Button(
+                    enabled = code.length == 6,
+                    onClick = { adb.pair(port.toIntOrNull(), code) { BridgeHub.audio.refresh() } },
+                ) { Text("جفت کردن") }
+            } else {
+                Button(onClick = {
+                    app.simbridge.android.receivers.AdbPairNotifier.show(ctx)
+                    openDevSettings()
+                }) { Text("شروع") }
+            }
+        },
+        dismissButton = {
+            if (state != "ready") {
+                TextButton(onClick = { manual = !manual }) { Text(if (manual) "با اعلان" else "وارد کردن دستی") }
+            }
+        },
+    )
 }

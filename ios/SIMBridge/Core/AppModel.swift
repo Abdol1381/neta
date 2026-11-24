@@ -46,6 +46,27 @@ final class AppModel: ObservableObject {
     }
     let audioPlayer = CallAudioPlayer()
     let callKit = CallKitManager()
+    let keeper = BackgroundKeeper()
+    /// Stay connected in the background (inaudible audio loop) so calls/SMS arrive instantly.
+    @Published var keepConnected: Bool = UserDefaults.standard.object(forKey: "keepConnected") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(keepConnected, forKey: "keepConnected")
+            if keepConnected { startKeeperIfIdle() } else { keeper.stop() }
+        }
+    }
+    private var keeping: Bool { keepConnected && pairing != nil && keeper.isRunning }
+
+    /// Back to the inaudible loop after call audio / a CallKit call released the audio session.
+    private func resumeKeeper() {
+        guard keepConnected, pairing != nil, !listening, !callKit.hasCall else { return }
+        keeper.resume()
+    }
+
+    /// Starts the background keeper unless a call's audio session is in use.
+    private func startKeeperIfIdle() {
+        guard keepConnected, pairing != nil, !TestHooks.isActive, !listening, !callKit.hasCall else { return }
+        keeper.start()
+    }
     /// Ring with the iPhone's own call screen (CallKit).
     @Published var useCallKit: Bool = UserDefaults.standard.object(forKey: "useCallKit") as? Bool ?? true {
         didSet { UserDefaults.standard.set(useCallKit, forKey: "useCallKit") }
@@ -104,7 +125,7 @@ final class AppModel: ObservableObject {
         callKit.onAudioDeactivated = { [weak self] in
             guard let self else { return }
             self.audioPlayer.stop()
-            if self.listening { self.audioPlayer.start() }
+            if self.listening { self.audioPlayer.start() } else { self.resumeKeeper() }
         }
     }
 
@@ -122,7 +143,10 @@ final class AppModel: ObservableObject {
         if let tab = TestHooks.initialTab { self.tab = tab }
         #endif
         if let p = pairing {
-            if isForeground { client.connect(.device(p)) }
+            if isForeground {
+                client.connect(.device(p))
+                startKeeperIfIdle()
+            }
             if !TestHooks.isActive { ble.start(serverId: p.serverId) }
         }
         #if DEBUG
@@ -134,6 +158,7 @@ final class AppModel: ObservableObject {
 
     func enterForeground() {
         isForeground = true
+        startKeeperIfIdle()
         client.autoReconnect = true
         endBackgroundTask()
         if let p = pairing {
@@ -146,6 +171,11 @@ final class AppModel: ObservableObject {
 
     func enterBackground() {
         isForeground = false
+        if keeping {
+            // Always-connected mode: keep the link (and pings) running in the background.
+            dlog("background: staying connected")
+            return
+        }
         stopPing()
         client.autoReconnect = false
         // Finish in-flight work, then release the socket; BLE will wake us for new events.
@@ -180,6 +210,7 @@ final class AppModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
             guard let self, let p = self.pairing else { return }
             self.client.connect(.device(p))
+            self.startKeeperIfIdle()
             if !TestHooks.isActive {
                 self.ble.start(serverId: p.serverId)
                 Notifier.requestAuthorization()
@@ -209,6 +240,7 @@ final class AppModel: ObservableObject {
     }
 
     func unpair() {
+        keeper.stop()
         client.reset()
         ble.stop()
         PairingStore.delete()
@@ -321,7 +353,7 @@ final class AppModel: ObservableObject {
         bgDeadline?.cancel()
         bgDeadline = nil
         // While call audio is playing the app stays alive (audio background mode) and keeps the link.
-        if !isForeground && !listening && !callKit.hasCall {
+        if !isForeground && !listening && !callKit.hasCall && !keeping {
             client.autoReconnect = false
             client.disconnect()
         }
@@ -665,7 +697,10 @@ final class AppModel: ObservableObject {
     private func stopListeningLocally() {
         guard listening else { return }
         listening = false
-        if !(callKit.hasCall && callKit.audioActive) { audioPlayer.stop() } // keep the engine for the native call
+        if !(callKit.hasCall && callKit.audioActive) {
+            audioPlayer.stop()
+            resumeKeeper()
+        } // else keep the engine for the native call
         // Back in the background without audio: release the connection shortly, as usual.
         if !isForeground { beginBackgroundTask(seconds: 3) }
     }
