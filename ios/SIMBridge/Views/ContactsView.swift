@@ -32,8 +32,8 @@ struct ContactsView: View {
                 if model.contacts.isEmpty {
                     EmptyState(
                         icon: "person.2",
-                        title: model.conn.isReady ? "مخاطبی دریافت نشد" : "به گوشی اندروید وصل نیست",
-                        subtitle: "مخاطبین آیفون و گوشی اندروید اینجا نمایش داده می‌شوند."
+                        title: model.conn.isReady ? "No Contacts" : "Not Connected",
+                        subtitle: "Contacts from this iPhone and the Android phone appear here."
                     )
                 } else {
                     List {
@@ -51,9 +51,9 @@ struct ContactsView: View {
                     .minimizingTabBar()
                 }
             }
-            .navigationTitle("مخاطبین")
+            .navigationTitle("Contacts")
             .navigationDestination(for: Contact.self) { ContactDetailView(contact: $0) }
-            .searchable(text: $search, prompt: "جستجو")
+            .searchable(text: $search, prompt: "Search")
             .refreshable { model.loadContacts() }
         }
     }
@@ -82,10 +82,10 @@ struct ContactDetailView: View {
 
                 GlassGroup {
                     HStack(spacing: 10) {
-                        action("پیام", "message.fill") { composeTo = primary }
-                        action("تماس", "phone.fill") { if let n = primary { model.dial(n) } }
+                        action("message", "message.fill") { composeTo = primary }
+                        action("call", "phone.fill") { if let n = primary { model.dial(n) } }
                         if model.sipState == "ok" {
-                            action("خط اینترنتی", "phone.connection.fill") { if let n = primary { model.dialVoip(n) } }
+                            action("internet", "phone.connection.fill") { if let n = primary { model.dialVoip(n) } }
                         }
                     }
                 }
@@ -97,8 +97,8 @@ struct ContactDetailView: View {
                         if i > 0 { Divider().padding(.leading, 16) }
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("موبایل").font(.subheadline).foregroundStyle(.secondary)
-                                Text(Phone.ltr(n)).font(.body).foregroundStyle(IOSColor.iMessageBlue)
+                                Text("mobile").font(.subheadline).foregroundStyle(.secondary)
+                                Text(n).font(.body).foregroundStyle(IOSColor.iMessageBlue)
                             }
                             Spacer()
                             Button { composeTo = n } label: { Image(systemName: "message").font(.title3) }

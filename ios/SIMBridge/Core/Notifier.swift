@@ -15,12 +15,12 @@ enum Notifier {
     private static let center = UNUserNotificationCenter.current()
 
     static func setup() {
-        let answer = UNNotificationAction(identifier: actAnswer, title: "پاسخ", options: [])
-        let answerSpk = UNNotificationAction(identifier: actAnswerSpeaker, title: "پاسخ با بلندگو", options: [])
-        let reject = UNNotificationAction(identifier: actReject, title: "رد تماس", options: [.destructive])
-        let reply = UNTextInputNotificationAction(identifier: actReply, title: "پاسخ", options: [],
-                                                  textInputButtonTitle: "ارسال", textInputPlaceholder: "پیام…")
-        let callback = UNNotificationAction(identifier: actCallback, title: "تماس", options: [.foreground])
+        let answer = UNNotificationAction(identifier: actAnswer, title: "Answer", options: [])
+        let answerSpk = UNNotificationAction(identifier: actAnswerSpeaker, title: "Answer on Speaker", options: [])
+        let reject = UNNotificationAction(identifier: actReject, title: "Decline", options: [.destructive])
+        let reply = UNTextInputNotificationAction(identifier: actReply, title: "Reply", options: [],
+                                                  textInputButtonTitle: "Send", textInputPlaceholder: "Text Message")
+        let callback = UNNotificationAction(identifier: actCallback, title: "Call Back", options: [.foreground])
         center.setNotificationCategories([
             UNNotificationCategory(identifier: catCall, actions: [answer, answerSpk, reject], intentIdentifiers: [], options: []),
             UNNotificationCategory(identifier: catSms, actions: [reply], intentIdentifiers: [], options: []),
@@ -52,8 +52,8 @@ enum Notifier {
 
     static func postIncomingCall(_ call: CallInfo, simLabel: String? = nil) {
         let c = UNMutableNotificationContent()
-        c.title = "تماس ورودی"
-        c.body = call.name.isEmpty ? Phone.ltr(call.number.isEmpty ? "شماره نامشخص" : call.number) : "\(call.name)  \(Phone.ltr(call.number))"
+        c.title = "Incoming Call"
+        c.body = call.name.isEmpty ? Phone.ltr(call.number.isEmpty ? "Unknown" : call.number) : "\(call.name)  \(Phone.ltr(call.number))"
         c.sound = .default
         c.categoryIdentifier = catCall
         if let simLabel { c.subtitle = simLabel }
@@ -69,8 +69,8 @@ enum Notifier {
 
     static func postMissed(number: String, name: String) {
         let c = UNMutableNotificationContent()
-        c.title = "تماس از دست رفته"
-        c.body = name.isEmpty ? Phone.ltr(number.isEmpty ? "شماره نامشخص" : number) : name
+        c.title = "Missed Call"
+        c.body = name.isEmpty ? Phone.ltr(number.isEmpty ? "Unknown" : number) : name
         c.sound = .default
         c.categoryIdentifier = catMissed
         c.userInfo = ["kind": "missed", "number": number]

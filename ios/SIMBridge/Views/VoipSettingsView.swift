@@ -12,7 +12,7 @@ struct VoipSettingsView: View {
         Form {
             Section {
                 HStack {
-                    Text("وضعیت")
+                    Text("Status")
                     Spacer()
                     HStack(spacing: 6) {
                         Circle().fill(statusColor).frame(width: 8, height: 8)
@@ -23,30 +23,30 @@ struct VoipSettingsView: View {
                     Text(model.sipMessage).font(.footnote).foregroundStyle(Theme.poor)
                 }
             } footer: {
-                Text("وقتی خط وصل است و انتقال تماس روشن است، تماس‌های سیم‌کارت مثل یک تماس معمولی روی آیفون زنگ می‌خورد و با میکروفون و بلندگوی خود آیفون صحبت می‌کنید.")
+                Text("When the line is connected and forwarding is on, SIM calls ring on this iPhone like a normal call and you talk using the iPhone's own microphone and speaker.")
             }
 
-            Section("حساب SIP (از ارائه‌دهنده خط تلفن اینترنتی)") {
-                field("سرور / دامنه", text: $acc.domain, placeholder: "sip.example.ir")
-                field("نام کاربری", text: $acc.username, placeholder: "1001")
-                SecureField("رمز عبور", text: $acc.password)
+            Section("SIP Account (from your internet phone provider)") {
+                field("Server", text: $acc.domain, placeholder: "sip.example.com")
+                field("User Name", text: $acc.username, placeholder: "1001")
+                SecureField("Password", text: $acc.password)
                     .textContentType(.password)
-                Picker("پروتکل", selection: $acc.transport) {
+                Picker("Transport", selection: $acc.transport) {
                     Text("UDP").tag("udp")
                     Text("TCP").tag("tcp")
                     Text("TLS").tag("tls")
                 }
-                field("سرور خروجی (اختیاری)", text: $acc.proxy, placeholder: "خالی = همان دامنه")
-                field("شماره تلفن این خط", text: $acc.lineNumber, placeholder: "021xxxxxxxx", keyboard: .phonePad)
+                field("Outbound Proxy", text: $acc.proxy, placeholder: "Optional")
+                field("Line Number", text: $acc.lineNumber, placeholder: "021xxxxxxxx", keyboard: .phonePad)
             }
 
             Section {
-                Button(model.sipAccount == nil ? "ذخیره و اتصال" : "ذخیره و اتصال دوباره") {
+                Button(model.sipAccount == nil ? "Save & Connect" : "Save & Reconnect") {
                     model.saveSipAccount(acc)
                 }
                 .disabled(!acc.isComplete)
                 if model.sipAccount != nil {
-                    Button("حذف خط", role: .destructive) {
+                    Button("Remove Line", role: .destructive) {
                         model.saveSipAccount(nil)
                         acc = SipAccount()
                     }
@@ -55,25 +55,25 @@ struct VoipSettingsView: View {
 
             Section {
                 if model.sims.isEmpty {
-                    Text(model.conn.isReady ? "سیم‌کارتی گزارش نشده" : "برای انتقال تماس، به گوشی اندروید وصل شوید")
+                    Text(model.conn.isReady ? "No SIM reported" : "Connect to the Android phone to set forwarding")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.sims) { sim in
                     forwardRow(sim)
                 }
             } header: {
-                Text("انتقال تماس‌های سیم‌کارت به این خط")
+                Text("Forward SIM Calls to This Line")
             } footer: {
-                Text("«همه تماس‌ها»: هر تماسی به سیم، روی آیفون زنگ می‌خورد. «اگر جواب ندادم»: اول گوشی اندروید زنگ می‌خورد و اگر جواب داده نشد، مشغول بود یا در دسترس نبود به آیفون منتقل می‌شود. کد انتقال روی همان سیم زده می‌شود و تأیید اپراتور روی گوشی اندروید نمایش داده می‌شود. هزینه تماس‌های منتقل‌شده طبق تعرفه انتقال تماس اپراتور است.")
+                Text("All Calls: every call to the SIM rings on this iPhone. When Unanswered: the Android phone rings first, then calls move here if unanswered, busy or unreachable. The carrier confirms on the Android phone. Forwarded minutes are charged at the carrier's forwarding rate.")
             }
 
             Section {
-                Label("تماس‌های ورودی منتقل‌شده: صدای کامل دوطرفه روی آیفون", systemImage: "checkmark.circle.fill")
-                Label("تماس خروجی از «خط اینترنتی» در صفحه‌کلید، با شماره همین خط گرفته می‌شود", systemImage: "info.circle.fill")
+                Label("Forwarded calls: full two-way audio on the iPhone", systemImage: "checkmark.circle.fill")
+                Label("Calls from the keypad via “Internet Line” show this line's number", systemImage: "info.circle.fill")
             }
             .font(.footnote)
         }
-        .navigationTitle("خط تلفن اینترنتی")
+        .navigationTitle("Internet Phone Line")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if !loaded {
@@ -88,7 +88,7 @@ struct VoipSettingsView: View {
         let mode = model.forwarding[key] ?? "off"
         return HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("سیم \(Fmt.persianDigits(String(sim.slot + 1))) · \(sim.title)")
+                Text("SIM \(sim.slot + 1) · \(sim.title)")
                 Text(modeText(mode)).font(.caption).foregroundStyle(mode == "off" ? Color.secondary : Theme.good)
             }
             Spacer()
@@ -96,11 +96,11 @@ struct VoipSettingsView: View {
                 ProgressView()
             } else {
                 Menu {
-                    Button("همه تماس‌ها به آیفون") { set(sim.subId, "all") }
-                    Button("فقط اگر جواب ندادم / در دسترس نبودم") { set(sim.subId, "conditional") }
-                    Button("خاموش (لغو انتقال)", role: .destructive) { set(sim.subId, "off") }
+                    Button("All Calls") { set(sim.subId, "all") }
+                    Button("When Unanswered / Unreachable") { set(sim.subId, "conditional") }
+                    Button("Off", role: .destructive) { set(sim.subId, "off") }
                 } label: {
-                    Text(mode == "off" ? "روشن کردن" : "تغییر").font(.subheadline.weight(.semibold))
+                    Text(mode == "off" ? "Turn On" : "Change").font(.subheadline.weight(.semibold))
                 }
                 .disabled(!model.conn.isReady)
             }
@@ -114,18 +114,18 @@ struct VoipSettingsView: View {
 
     private func modeText(_ m: String) -> String {
         switch m {
-        case "all": return "همه تماس‌ها به آیفون منتقل می‌شود"
-        case "conditional": return "اگر جواب ندادم / در دسترس نبودم"
-        default: return "خاموش"
+        case "all": return "All calls forwarded"
+        case "conditional": return "When unanswered"
+        default: return "Off"
         }
     }
 
     private var statusText: String {
         switch model.sipState {
-        case "ok": return "وصل و آماده"
-        case "registering": return "در حال اتصال…"
-        case "failed": return "خطا در اتصال"
-        default: return model.sipAccount == nil ? "تنظیم نشده" : "قطع"
+        case "ok": return "Connected"
+        case "registering": return "Connecting…"
+        case "failed": return "Can't Connect"
+        default: return model.sipAccount == nil ? "Not Set Up" : "Disconnected"
         }
     }
 

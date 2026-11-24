@@ -18,8 +18,8 @@ struct ThreadsView: View {
                 if model.threads.isEmpty {
                     EmptyState(
                         icon: model.conn.isReady ? "message" : "wifi.slash",
-                        title: model.conn.isReady ? (model.loadingThreads ? "در حال دریافت…" : "پیامی نیست") : "به گوشی اندروید وصل نیست",
-                        subtitle: model.conn.isReady ? "پیامک‌های سیم‌کارت اندروید اینجا نمایش داده می‌شوند." : "پس از اتصال، پیام‌ها اینجا نمایش داده می‌شوند."
+                        title: model.conn.isReady ? (model.loadingThreads ? "Loading…" : "No Messages") : "Not Connected",
+                        subtitle: model.conn.isReady ? "Text messages on the Android phone's SIM appear here." : "Messages appear here once the Android phone is connected."
                     )
                 } else {
                     List(filtered) { t in
@@ -31,9 +31,9 @@ struct ThreadsView: View {
                     .minimizingTabBar()
                 }
             }
-            .navigationTitle("پیام‌ها")
+            .navigationTitle("Messages")
             .navigationDestination(for: SmsThread.self) { t in ConversationView(thread: t) }
-            .searchable(text: $search, prompt: "جستجو")
+            .searchable(text: $search, prompt: "Search")
             .refreshable { await withCheckedContinuation { c in model.loadThreads { c.resume() } } }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -69,7 +69,7 @@ struct ThreadRow: View {
             Avatar(name: thread.name.isEmpty ? thread.address : thread.name, size: 44)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(thread.name.isEmpty ? Phone.ltr(thread.address) : thread.name)
+                    Text(thread.name.isEmpty ? thread.address : thread.name)
                         .font(.body.weight(.semibold))
                         .lineLimit(1)
                     Spacer(minLength: 6)
@@ -108,7 +108,7 @@ struct ConversationView: View {
                         let prev = i > 0 ? list[i - 1] : nil
                         let next = i + 1 < list.count ? list[i + 1] : nil
                         if prev == nil || m.date - prev!.date > 3_600_000 {
-                            Text(Fmt.dayHeader(m.date) + " " + Fmt.clock(m.date))
+                            Text(Fmt.stamp(m.date))
                                 .font(.caption2.weight(.medium))
                                 .foregroundStyle(.secondary)
                                 .padding(.top, 14)
@@ -166,8 +166,8 @@ struct ConversationView: View {
     private var routeName: String {
         if useIMessage { return "iMessage" }
         let sim = model.sims.first { $0.subId == subId } ?? model.sims.first { $0.smsSim }
-        if model.sims.count > 1, let sim { return "پیامک · سیم " + Fmt.persianDigits(String(sim.slot + 1)) }
-        return "پیامک"
+        if model.sims.count > 1, let sim { return "Text Message · SIM \(sim.slot + 1)" }
+        return "Text Message · SMS"
     }
 
     private var sendColor: Color { useIMessage ? IOSColor.iMessageBlue : IOSColor.smsGreen }
@@ -227,9 +227,9 @@ struct Bubble: View {
     var isLastOut: Bool = false
 
     var body: some View {
-        VStack(alignment: message.out ? .leading : .trailing, spacing: 2) {
+        VStack(alignment: message.out ? .trailing : .leading, spacing: 2) {
             HStack(spacing: 0) {
-                if !message.out { Spacer(minLength: 60) }
+                if message.out { Spacer(minLength: 60) }
                 Text(message.body)
                     .font(.body)
                     .foregroundStyle(message.out ? Color.white : Color.primary)
@@ -239,10 +239,10 @@ struct Bubble: View {
                     .background(message.out ? IOSColor.smsGreen : IOSColor.incoming,
                                 in: BubbleShape(outgoing: message.out, tail: tail))
                     .contextMenu {
-                        Button { UIPasteboard.general.string = message.body } label: { Label("کپی", systemImage: "doc.on.doc") }
-                        Text(Fmt.dayHeader(message.date) + " " + Fmt.clock(message.date))
+                        Button { UIPasteboard.general.string = message.body } label: { Label("Copy", systemImage: "doc.on.doc") }
+                        Text(Fmt.stamp(message.date))
                     }
-                if message.out { Spacer(minLength: 60) }
+                if !message.out { Spacer(minLength: 60) }
             }
             if message.out && (isLastOut || message.status == "failed" || message.status == "sending") {
                 statusLine
@@ -250,20 +250,20 @@ struct Bubble: View {
                     .padding(.horizontal, 6)
             }
         }
-        .frame(maxWidth: .infinity, alignment: message.out ? .leading : .trailing)
+        .frame(maxWidth: .infinity, alignment: message.out ? .trailing : .leading)
     }
 
     @ViewBuilder private var statusLine: some View {
         switch message.status {
-        case "sending": Text("در حال ارسال…").foregroundStyle(.secondary)
-        case "failed": Label("ارسال نشد", systemImage: "exclamationmark.circle.fill").foregroundStyle(IOSColor.callRed)
-        case "delivered": Text("تحویل شد").foregroundStyle(.secondary)
-        default: Text("ارسال شد").foregroundStyle(.secondary)
+        case "sending": Text("Sending…").foregroundStyle(.secondary)
+        case "failed": Label("Not Delivered", systemImage: "exclamationmark.circle.fill").foregroundStyle(IOSColor.callRed)
+        case "delivered": Text("Delivered").foregroundStyle(.secondary)
+        default: Text("Sent").foregroundStyle(.secondary)
         }
     }
 }
 
-/// Rounded bubble with the small iOS tail on the bottom corner (RTL: outgoing on the right).
+/// Rounded bubble with the small iOS tail on the bottom corner (outgoing right, incoming left).
 struct BubbleShape: Shape {
     var outgoing: Bool
     var tail: Bool
@@ -272,7 +272,6 @@ struct BubbleShape: Shape {
         let r: CGFloat = 18
         var p = Path(roundedRect: rect, cornerRadius: r, style: .continuous)
         guard tail else { return p }
-        // In the RTL layout outgoing bubbles sit on the right, so their tail is bottom-right.
         let right = outgoing
         let x = right ? rect.maxX : rect.minX
         let dir: CGFloat = right ? 1 : -1
@@ -305,7 +304,7 @@ struct SimPicker: View {
                     iMessage?.wrappedValue = false
                     voip?.wrappedValue = false
                 } label: {
-                    Label("سیم \(Fmt.persianDigits(String(s.slot + 1))) — \(s.title)",
+                    Label("SIM \(s.slot + 1) — \(s.title)",
                           systemImage: !usingIMessage && !usingVoip && subId == s.subId ? "checkmark" : "simcard")
                 }
             }
@@ -314,7 +313,7 @@ struct SimPicker: View {
                 Button {
                     voip.wrappedValue = true
                 } label: {
-                    Label("خط اینترنتی (صحبت روی آیفون)", systemImage: usingVoip ? "checkmark" : "phone.connection")
+                    Label("Internet Line (talk on iPhone)", systemImage: usingVoip ? "checkmark" : "phone.connection")
                 }
             }
             if let iMessage, MessageComposer.available {
@@ -322,7 +321,7 @@ struct SimPicker: View {
                 Button {
                     iMessage.wrappedValue = true
                 } label: {
-                    Label("iMessage آیفون", systemImage: usingIMessage ? "checkmark" : "message.fill")
+                    Label("iMessage", systemImage: usingIMessage ? "checkmark" : "message.fill")
                 }
             }
         } label: {
@@ -396,7 +395,7 @@ struct ComposeView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("شماره یا نام مخاطب", text: $to)
+                    TextField("To:", text: $to)
                         .keyboardType(.default)
                         .textContentType(.telephoneNumber)
                     if !suggestions.isEmpty && !to.allSatisfy({ $0.isNumber || $0 == "+" }) {
@@ -414,28 +413,28 @@ struct ComposeView: View {
                     }
                 }
                 Section {
-                    TextField("متن پیامک", text: $text, axis: .vertical).lineLimit(4...10)
+                    TextField("Text Message", text: $text, axis: .vertical).lineLimit(4...10)
                     if MessageComposer.available {
-                        Toggle("ارسال با iMessage آیفون", isOn: $useIMessage)
+                        Toggle("Send as iMessage", isOn: $useIMessage)
                     }
                     if model.sims.count > 1 && !useIMessage {
-                        Picker("سیم‌کارت", selection: Binding(get: { subId ?? defaultSub }, set: { subId = $0 })) {
-                            ForEach(model.sims) { s in Text("سیم \(s.slot + 1) — \(s.title)").tag(Optional(s.subId)) }
+                        Picker("SIM", selection: Binding(get: { subId ?? defaultSub }, set: { subId = $0 })) {
+                            ForEach(model.sims) { s in Text("SIM \(s.slot + 1) — \(s.title)").tag(Optional(s.subId)) }
                         }
                     }
                 } footer: {
                     Text(useIMessage
-                         ? "پیام با iMessage خود آیفون (Apple ID شما) فرستاده می‌شود؛ گیرنده هم باید iMessage داشته باشد."
-                         : "پیامک از سیم‌کارت گوشی اندروید ارسال می‌شود و هزینه آن طبق تعرفه همان سیم‌کارت است.")
+                         ? "Sent from this iPhone's iMessage (your Apple ID). The recipient needs iMessage too."
+                         : "Sent as SMS from the Android phone's SIM, charged at that SIM's rates.")
                 }
             }
-            .navigationTitle("پیام جدید")
+            .navigationTitle("New Message")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("انصراف") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     if sending { ProgressView() } else {
-                        Button("ارسال") { send() }.disabled(!canSend)
+                        Button("Send") { send() }.disabled(!canSend)
                     }
                 }
             }

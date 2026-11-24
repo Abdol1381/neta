@@ -12,11 +12,10 @@ enum TestHooks {
     static var initialTab: AppTab? {
         switch d.string(forKey: "SIMBridgeTab") {
         case "messages", "thread": return .messages
-        case "phone": return .phone
-        case "recents": return .phone
+        case "phone": return .keypad
+        case "recents": return .calls
         case "contacts": return .contacts
-        case "settings": return .settings
-        case "home": return .home
+        case "settings", "home": return .settings
         default: return nil
         }
     }

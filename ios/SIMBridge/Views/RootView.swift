@@ -30,8 +30,8 @@ struct RootView: View {
         .fullScreenCover(isPresented: callScreenBinding) {
             CallScreen()
                 .environmentObject(model)
-                .environment(\.layoutDirection, .rightToLeft)
-                .environment(\.locale, Locale(identifier: "fa_IR"))
+                .environment(\.layoutDirection, .leftToRight)
+                .environment(\.locale, Locale(identifier: "en_US"))
         }
     }
 
@@ -52,21 +52,22 @@ struct MainTabView: View {
                 OngoingCallBar()
             }
             TabView(selection: $model.tab) {
-                DashboardView()
-                    .tabItem { Label("خانه", systemImage: "antenna.radiowaves.left.and.right") }
-                    .tag(AppTab.home)
                 ThreadsView()
-                    .tabItem { Label("پیام‌ها", systemImage: "message.fill") }
+                    .tabItem { Label("Messages", systemImage: "message.fill") }
                     .badge(model.threads.reduce(0) { $0 + $1.unread })
                     .tag(AppTab.messages)
-                PhoneView()
-                    .tabItem { Label("تلفن", systemImage: "phone.fill") }
-                    .tag(AppTab.phone)
+                RecentsTab()
+                    .tabItem { Label("Calls", systemImage: "phone.fill") }
+                    .badge(model.recents.prefix(30).filter { $0.type == "missed" && $0.date > model.missedSeenAt }.count)
+                    .tag(AppTab.calls)
                 ContactsView()
-                    .tabItem { Label("مخاطبین", systemImage: "person.2.fill") }
+                    .tabItem { Label("Contacts", systemImage: "person.crop.circle.fill") }
                     .tag(AppTab.contacts)
+                KeypadTab()
+                    .tabItem { Label("Keypad", systemImage: "circle.grid.3x3.fill") }
+                    .tag(AppTab.keypad)
                 SettingsView()
-                    .tabItem { Label("تنظیمات", systemImage: "gearshape.fill") }
+                    .tabItem { Label("Settings", systemImage: "gearshape.fill") }
                     .tag(AppTab.settings)
             }
             .minimizingTabBar()
@@ -83,17 +84,17 @@ struct OngoingCallBar: View {
         } label: {
             HStack {
                 Image(systemName: model.call.state == "ringing" ? "phone.arrow.down.left.fill" : "phone.fill")
-                Text(model.call.state == "ringing" ? "تماس ورودی: \(Phone.iso(model.call.display))" : "در تماس: \(Phone.iso(model.call.display))")
+                Text(model.call.state == "ringing" ? "Incoming call · \(model.call.display)" : model.call.display)
                     .lineLimit(1)
                 Spacer()
-                Text("بازگشت").font(.footnote.weight(.semibold))
+                Text("Return to Call").font(.footnote.weight(.semibold))
             }
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
-            .background(Theme.good)
+            .background(IOSColor.callGreen)
         }
     }
 }

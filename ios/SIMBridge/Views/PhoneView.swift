@@ -1,26 +1,168 @@
 import SwiftUI
 import AudioToolbox
 
-struct PhoneView: View {
+// MARK: - Calls tab (like the Phone app's Recents / Calls)
+
+struct RecentsTab: View {
     @EnvironmentObject var model: AppModel
-    @State private var segment = TestHooks.phoneSegment
+    @State private var missedOnly = false
+    @State private var detail: CallLogEntry?
+
+    private var items: [CallLogEntry] {
+        missedOnly ? model.recents.filter { $0.type == "missed" } : model.recents
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Picker("", selection: $segment) {
-                    Text("صفحه‌کلید").tag(0)
-                    Text("اخیر").tag(1)
+            Group {
+                if items.isEmpty {
+                    EmptyState(icon: "phone", title: missedOnly ? "No Missed Calls" : "No Recents",
+                               subtitle: "Calls on the Android phone's SIM appear here.")
+                } else {
+                    List(items) { c in
+                        RecentRow(entry: c, missed: c.type == "missed" || c.type == "rejected") {
+                            detail = c
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { if !c.number.isEmpty { model.dial(c.number) } }
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 12))
+                    }
+                    .listStyle(.plain)
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                if segment == 0 { KeypadView() } else { RecentsView() }
             }
-            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
-            .navigationTitle("تلفن")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Recents")
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Picker("", selection: $missedOnly) {
+                        Text("All").tag(false)
+                        Text("Missed").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
+                }
+            }
+            .refreshable { model.loadRecents() }
+            .onAppear {
+                model.loadRecents()
+                model.markMissedSeen()
+            }
+            .sheet(item: $detail) { c in
+                CallInfoSheet(entry: c).environmentObject(model)
+                    .presentationDetents([.medium])
+            }
         }
+    }
+}
+
+/// One row of Recents: name (red when missed), call kind, time and the blue (i) button.
+struct RecentRow: View {
+    var entry: CallLogEntry
+    var missed: Bool
+    var info: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "phone.arrow.up.right.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(width: 14)
+                .opacity(entry.type == "out" ? 1 : 0)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(entry.name.isEmpty ? entry.title : entry.name)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(missed ? IOSColor.callRed : .primary)
+                    .lineLimit(1)
+                Text(kind).font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(Fmt.short(entry.date)).font(.subheadline).foregroundStyle(.secondary)
+            Button(action: info) {
+                Image(systemName: "info.circle").font(.system(size: 21)).foregroundStyle(IOSColor.iMessageBlue)
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private var kind: String {
+        switch entry.type {
+        case "in": return "Incoming"
+        case "out": return "Outgoing"
+        case "missed": return "Missed"
+        case "rejected": return "Declined"
+        case "blocked": return "Blocked"
+        default: return "Call"
+        }
+    }
+}
+
+/// Call details like the (i) page: name, number, actions and the call itself.
+struct CallInfoSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    var entry: CallLogEntry
+    @State private var compose: String?
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Avatar(name: entry.name.isEmpty ? entry.number : entry.name, size: 84).padding(.top, 24)
+            Text(entry.name.isEmpty ? entry.title : entry.name).font(.title2.weight(.semibold))
+            if !entry.name.isEmpty { Text(entry.number).foregroundStyle(.secondary) }
+            GlassGroup {
+                HStack(spacing: 10) {
+                    actionButton("message", "message.fill") { compose = entry.number }
+                    actionButton("call", "phone.fill") { dismiss(); model.dial(entry.number) }
+                }
+            }
+            .padding(.horizontal, 24)
+            .disabled(entry.number.isEmpty)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(Fmt.stamp(entry.date)).font(.subheadline.weight(.semibold))
+                Text(entry.duration > 0 ? "\(typeText) · \(Fmt.duration(entry.duration))" : typeText)
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.horizontal, 24)
+            Spacer()
+        }
+        .background(Theme.background.ignoresSafeArea())
+        .sheet(item: Binding(get: { compose.map { ComposeTarget(number: $0) } }, set: { compose = $0?.number })) { t in
+            ComposeView(initialNumber: t.number).environmentObject(model)
+        }
+    }
+
+    private var typeText: String {
+        switch entry.type {
+        case "in": return "Incoming Call"
+        case "out": return "Outgoing Call"
+        case "missed": return "Missed Call"
+        case "rejected": return "Declined Call"
+        default: return "Call"
+        }
+    }
+
+    private func actionButton(_ title: String, _ icon: String, _ run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            VStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 20))
+                Text(title).font(.caption.weight(.medium))
+            }
+            .foregroundStyle(IOSColor.iMessageBlue)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .glass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), interactive: true)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Keypad tab (like the Phone app's Keypad)
+
+struct KeypadTab: View {
+    var body: some View {
+        KeypadView()
+            .background(Color(uiColor: .systemBackground).ignoresSafeArea())
     }
 }
 
@@ -48,33 +190,38 @@ struct KeypadView: View {
     var body: some View {
         GeometryReader { geo in
             // Size keys to the space available so the pad fits from iPhone SE to Pro Max.
-            let key = min(78, max(56, (geo.size.height - 250) / 5.2))
-            let gap = key * 0.24
-            VStack(spacing: gap * 0.8) {
+            let key = min(80, max(58, (geo.size.height - 240) / 5.1))
+            let gap = key * 0.22
+            VStack(spacing: gap) {
                 Spacer(minLength: 4)
-                VStack(spacing: 4) {
+                VStack(spacing: 6) {
                     Text(number.isEmpty ? " " : number)
-                        .font(.system(size: 34, weight: .medium, design: .rounded))
+                        .font(.system(size: 38, weight: .regular))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.5)
+                        .minimumScaleFactor(0.45)
                         .frame(maxWidth: .infinity)
-                        .ltr()
-                    Text(model.displayName(for: number) ?? " ")
-                        .font(.subheadline).foregroundStyle(Theme.accent)
+                    Button {
+                        // "Add Number" like iOS: start a message to this number.
+                    } label: {
+                        Text(model.displayName(for: number) ?? " ")
+                            .font(.body)
+                            .foregroundStyle(IOSColor.iMessageBlue)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 24)
+                .frame(height: 90)
 
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(key), spacing: gap * 1.3), count: 3), spacing: gap) {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(key), spacing: gap * 1.45), count: 3), spacing: gap) {
                     ForEach(keys) { k in
                         Button {
                             if suppressTap { suppressTap = false; return }
                             if number.count < 32 { number.append(k.digit) }
                             Self.playTone(k.digit)
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         } label: {
-                            VStack(spacing: -2) {
-                                Text(k.digit).font(.system(size: key * 0.46, weight: .regular))
-                                Text(k.letters).font(.system(size: 10, weight: .bold)).tracking(1.5).opacity(0.75).frame(height: 12)
+                            VStack(spacing: -3) {
+                                Text(k.digit).font(.system(size: key * 0.47, weight: .regular))
+                                Text(k.letters).font(.system(size: 10, weight: .bold)).tracking(2).opacity(0.85).frame(height: 12)
                             }
                             .frame(width: key, height: key)
                             .foregroundStyle(.primary)
@@ -90,9 +237,8 @@ struct KeypadView: View {
                         })
                     }
                 }
-                .ltr()
 
-                HStack(spacing: gap * 1.3) {
+                HStack(spacing: gap * 1.45) {
                     Group {
                         if model.sims.count > 1 || model.sipState == "ok" { SimPicker(subId: $subId, voip: $useVoip) } else { Color.clear }
                     }
@@ -102,10 +248,10 @@ struct KeypadView: View {
                         if useVoip && !AppModel.isUssd(number) { model.dialVoip(number) } else { model.dial(number, subId: subId) }
                     } label: {
                         Image(systemName: "phone.fill")
-                            .font(.system(size: key * 0.36))
+                            .font(.system(size: key * 0.38))
                             .foregroundStyle(.white)
                             .frame(width: key, height: key)
-                            .background(canCall ? IOSColor.callGreen : Color.gray.opacity(0.35), in: Circle())
+                            .background(IOSColor.callGreen.opacity(canCall ? 1 : 0.45), in: Circle())
                     }
                     .disabled(!canCall)
 
@@ -113,7 +259,9 @@ struct KeypadView: View {
                         if suppressTap { suppressTap = false; return }
                         if !number.isEmpty { number.removeLast() }
                     } label: {
-                        Image(systemName: "delete.left").font(.system(size: 24)).foregroundStyle(.secondary)
+                        Image(systemName: "delete.left.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(Color(uiColor: .systemGray2))
                             .frame(width: key, height: key)
                     }
                     .opacity(number.isEmpty ? 0 : 1)
@@ -123,10 +271,9 @@ struct KeypadView: View {
                         number = ""
                     })
                 }
-                .ltr()
 
-                Text(model.conn.isReady ? " " : "برای تماس، اتصال به گوشی اندروید لازم است")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(model.conn.isReady || useVoip ? " " : "Connect to the Android phone to call")
+                    .font(.footnote).foregroundStyle(.secondary)
                 Spacer(minLength: 4)
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -134,7 +281,6 @@ struct KeypadView: View {
         .sheet(isPresented: Binding(get: { model.ussd != nil }, set: { if !$0 { model.ussd = nil } })) {
             UssdSheet().environmentObject(model)
                 .presentationDetents([.medium])
-                .environment(\.layoutDirection, .rightToLeft)
         }
     }
 
@@ -152,93 +298,23 @@ struct KeypadView: View {
     }
 }
 
-struct RecentsView: View {
-    @EnvironmentObject var model: AppModel
-    @State private var missedOnly = false
-
-    private var items: [CallLogEntry] {
-        missedOnly ? model.recents.filter { $0.type == "missed" } : model.recents
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $missedOnly) {
-                Text("همه").tag(false)
-                Text("از دست رفته").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 60)
-            .padding(.bottom, 6)
-            if items.isEmpty {
-                EmptyState(icon: "clock", title: missedOnly ? "تماس از دست رفته‌ای نیست" : "تماسی ثبت نشده",
-                           subtitle: "تاریخچه تماس‌های سیم‌کارت اندروید اینجا نمایش داده می‌شود.")
-            } else {
-                List(items) { c in
-                    Button {
-                        model.dial(c.number)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: c.type == "out" ? "phone.arrow.up.right.fill" : "phone.arrow.down.left.fill")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 16)
-                                .opacity(c.type == "out" ? 1 : 0)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(c.name.isEmpty ? Phone.ltr(c.title) : c.title)
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(c.type == "missed" || c.type == "rejected" ? IOSColor.callRed : .primary)
-                                    .lineLimit(1)
-                                Text(label(c)).font(.subheadline).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(Fmt.short(c.date)).font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(c.number.isEmpty || !model.conn.isReady)
-                }
-                .listStyle(.plain)
-                .minimizingTabBar()
-            }
-        }
-        .refreshable { model.loadRecents() }
-        .onAppear { model.loadRecents() }
-    }
-
-    private func label(_ c: CallLogEntry) -> String {
-        let kind: String
-        switch c.type {
-        case "in": kind = "ورودی"
-        case "out": kind = "خروجی"
-        case "missed": kind = "از دست رفته"
-        case "rejected": kind = "رد شده"
-        case "blocked": kind = "مسدود"
-        default: kind = "تماس"
-        }
-        return c.duration > 0 ? "\(kind) · \(Fmt.duration(c.duration))" : kind
-    }
-}
-
-/// Operator reply to a USSD code such as *140#.
+/// Carrier reply to a USSD code such as *140#.
 struct UssdSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: 16) {
-            Capsule().fill(Color.secondary.opacity(0.3)).frame(width: 36, height: 5).padding(.top, 8)
             switch model.ussd {
             case .running(let code):
                 header(code)
                 ProgressView().controlSize(.large).padding(.top, 20)
-                Text("در انتظار پاسخ اپراتور…").foregroundStyle(.secondary)
+                Text("Waiting for the carrier…").foregroundStyle(.secondary)
             case .reply(let code, let text):
                 header(code)
                 ScrollView {
                     Text(text)
                         .font(.body)
-                        .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
                 }
@@ -252,22 +328,23 @@ struct UssdSheet: View {
                 EmptyView()
             }
             Spacer(minLength: 0)
-            Button("بستن") { dismiss() }
+            Button("Done") { dismiss() }
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .glass(in: Capsule(), tint: IOSColor.iMessageBlue, interactive: true)
                 .foregroundStyle(.white)
         }
         .padding(.horizontal, 20)
+        .padding(.top, 24)
         .padding(.bottom, 12)
         .background(Theme.background.ignoresSafeArea())
     }
 
     private func header(_ code: String) -> some View {
         VStack(spacing: 4) {
-            Text("پاسخ اپراتور").font(.headline)
-            Text(Phone.ltr(code)).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+            Text("Carrier Message").font(.headline)
+            Text(code).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
         }
     }
 }

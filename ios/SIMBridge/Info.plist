@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>fa</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>SIMBridge</string>
 	<key>CFBundleExecutable</key>
@@ -22,7 +22,7 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>CFBundleLocalizations</key>
 	<array>
-		<string>fa</string>
+		<string>en</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
@@ -48,19 +48,19 @@
 		<string>voip</string>
 	</array>
 	<key>NSContactsUsageDescription</key>
-	<string>برای نمایش نام تماس‌گیرنده و فرستنده پیامک از مخاطبین آیفون شما. مخاطبین از گوشی خارج نمی‌شوند.</string>
+	<string>SIMBridge shows the names of people who call or text you from your iPhone contacts. Contacts never leave this iPhone.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>برای صحبت در تماس‌های خط تلفن اینترنتی و صفحه تماس آیفون. صدای شما ضبط یا ذخیره نمی‌شود.</string>
+	<string>Used for internet phone calls and the iPhone call screen. Your voice is never recorded or stored.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>برای اسکن کد QR اتصال به گوشی اندروید.</string>
+	<string>Used to scan the QR code shown by SIMBridge on your Android phone.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>برای اتصال مستقیم و رمزنگاری‌شده به گوشی اندروید شما در همین شبکه.</string>
+	<string>SIMBridge connects directly to your Android phone on this network, end-to-end encrypted.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_simbridge._tcp</string>
 	</array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>تا گوشی اندروید بتواند هنگام دریافت پیامک یا تماس، حتی وقتی اپ باز نیست، آیفون را باخبر کند.</string>
+	<string>Lets your Android phone alert this iPhone about new calls and messages, even when SIMBridge is in the background.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

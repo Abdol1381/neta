@@ -100,7 +100,7 @@ struct SignalBarsView: View {
         .frame(height: height, alignment: .bottom)
         .animation(.easeInOut(duration: 0.35), value: level)
         .ltr()
-        .accessibilityLabel("آنتن \(level) از ۴")
+        .accessibilityLabel("Signal \(level) of 4")
     }
 }
 
@@ -159,10 +159,10 @@ struct StatusPill: View {
 
     private var text: String {
         switch conn {
-        case .ready: return "متصل"
-        case .connecting, .authenticating, .awaitingApproval: return "در حال اتصال…"
-        case .idle: return "قطع"
-        case .failed: return "در دسترس نیست"
+        case .ready: return "Connected"
+        case .connecting, .authenticating, .awaitingApproval: return "Connecting…"
+        case .idle: return "Disconnected"
+        case .failed: return "Unavailable"
         }
     }
 }
@@ -182,60 +182,68 @@ struct ToastView: View {
     }
 }
 
+/// Dates and durations formatted the way iOS Messages / Phone show them (English, Gregorian).
 enum Fmt {
-    static let persianCalendar: Calendar = {
-        var c = Calendar(identifier: .persian)
-        c.locale = Locale(identifier: "fa_IR")
+    static let calendar: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.locale = Locale(identifier: "en_US")
         return c
     }()
+    /// Kept for call sites that group by day.
+    static var persianCalendar: Calendar { calendar }
 
-    private static func formatter(_ format: String) -> DateFormatter {
+    private static func formatter(_ template: String) -> DateFormatter {
         let f = DateFormatter()
-        f.calendar = persianCalendar
-        f.locale = Locale(identifier: "fa_IR")
-        f.dateFormat = format
+        f.calendar = calendar
+        f.locale = Locale(identifier: "en_US")
+        f.setLocalizedDateFormatFromTemplate(template)
         return f
     }
 
-    private static let time = formatter("HH:mm")
-    private static let day = formatter("d MMMM")
-    private static let full = formatter("d MMMM yyyy")
-    private static let weekday = formatter("EEEE")
+    private static let time = formatter("jmm")            // 10:41 AM
+    private static let weekday = formatter("EEEE")        // Monday
+    private static let shortDate = formatter("Mdyy")      // 11/20/26
+    private static let longDay = formatter("EEEMMMd")     // Mon, Nov 18
 
     static func date(_ ms: Int64) -> Date { Date(timeIntervalSince1970: TimeInterval(ms) / 1000) }
 
-    /// Compact: time today, weekday this week, otherwise date.
+    /// Like the Messages / Recents lists: time today, "Yesterday", weekday this week, otherwise date.
     static func short(_ ms: Int64) -> String {
         let d = date(ms)
-        let cal = persianCalendar
-        if cal.isDateInToday(d) { return time.string(from: d) }
-        if cal.isDateInYesterday(d) { return "دیروز" }
-        if let days = cal.dateComponents([.day], from: d, to: Date()).day, days < 7 { return weekday.string(from: d) }
-        if cal.component(.year, from: d) == cal.component(.year, from: Date()) { return day.string(from: d) }
-        return full.string(from: d)
+        if calendar.isDateInToday(d) { return time.string(from: d) }
+        if calendar.isDateInYesterday(d) { return "Yesterday" }
+        if let days = calendar.dateComponents([.day], from: d, to: Date()).day, days < 7 { return weekday.string(from: d) }
+        return shortDate.string(from: d)
     }
 
     static func clock(_ ms: Int64) -> String { time.string(from: date(ms)) }
 
+    /// Conversation timestamp header: "Today 10:41 AM", "Yesterday 3:46 PM", "Mon, Nov 18 10:41 AM".
+    static func stamp(_ ms: Int64) -> String {
+        let d = date(ms)
+        let t = time.string(from: d)
+        if calendar.isDateInToday(d) { return "Today \(t)" }
+        if calendar.isDateInYesterday(d) { return "Yesterday \(t)" }
+        if let days = calendar.dateComponents([.day], from: d, to: Date()).day, days < 7 { return "\(weekday.string(from: d)) \(t)" }
+        return "\(longDay.string(from: d)) \(t)"
+    }
+
     static func dayHeader(_ ms: Int64) -> String {
         let d = date(ms)
-        if persianCalendar.isDateInToday(d) { return "امروز" }
-        if persianCalendar.isDateInYesterday(d) { return "دیروز" }
-        return full.string(from: d)
+        if calendar.isDateInToday(d) { return "Today" }
+        if calendar.isDateInYesterday(d) { return "Yesterday" }
+        return longDay.string(from: d)
     }
 
     static func duration(_ seconds: Int64) -> String {
         let s = Int(max(0, seconds))
-        let str = s >= 3600
+        return s >= 3600
             ? String(format: "%ld:%02ld:%02ld", s / 3600, (s % 3600) / 60, s % 60)
             : String(format: "%02ld:%02ld", s / 60, s % 60)
-        return persianDigits(str)
     }
 
-    static func persianDigits(_ s: String) -> String {
-        let map: [Character: Character] = ["0": "۰", "1": "۱", "2": "۲", "3": "۳", "4": "۴", "5": "۵", "6": "۶", "7": "۷", "8": "۸", "9": "۹"]
-        return String(s.map { map[$0] ?? $0 })
-    }
+    /// English UI: digits stay Western.
+    static func persianDigits(_ s: String) -> String { s }
 }
 
 // MARK: - Liquid Glass (iOS 26+) with a blur fallback on older iOS

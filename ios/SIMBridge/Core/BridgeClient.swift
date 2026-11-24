@@ -21,23 +21,23 @@ enum BridgeError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConnected: return "به گوشی اندروید وصل نیست"
-        case .timeout: return "پاسخی از گوشی اندروید نرسید"
+        case .notConnected: return "Not connected to the Android phone"
+        case .timeout: return "The Android phone did not respond"
         case .server(let code):
             switch code {
-            case "permission_denied": return "دسترسی لازم در اپ اندروید داده نشده است"
-            case "no_call": return "تماسی در جریان نیست"
-            case "busy": return "یک تماس دیگر در جریان است"
-            case "unsupported": return "این قابلیت روی این گوشی اندروید پشتیبانی نمی‌شود"
-            case "bad_request": return "اطلاعات واردشده معتبر نیست"
-            case "ussd_failed": return "اپراتور به این کد پاسخ نداد یا کد نامعتبر است"
-            case "timeout": return "پاسخی از اپراتور نرسید"
-            case "dev_no_shizuku", "dev_not_set_up": return "برای شنیدن تماس روی آیفون، در اپ اندروید «شنیدن تماس روی آیفون ← راه‌اندازی» را انجام دهید"
-            case "dev_adb_offline": return "گوشی اندروید به «اشکال‌زدایی بی‌سیم» وصل نیست (Wi-Fi روشن باشد)"
-            case "dev_no_permission": return "در اپ اندروید به SIMBridge اجازه Shizuku بدهید"
-            case "dev_unsupported": return "گوشی اندروید از شنیدن تماس پشتیبانی نمی‌کند (اندروید ۱۱+ لازم است)"
-            case "audio_failed": return "دریافت صدای تماس روی گوشی اندروید شروع نشد"
-            default: return "خطا در گوشی اندروید (\(code))"
+            case "permission_denied": return "Permission missing in the Android app"
+            case "no_call": return "No active call"
+            case "busy": return "Another call is in progress"
+            case "unsupported": return "Not supported on this Android phone"
+            case "bad_request": return "Invalid number or text"
+            case "ussd_failed": return "The carrier did not answer this code"
+            case "timeout": return "No reply from the carrier"
+            case "dev_no_shizuku", "dev_not_set_up": return "To hear calls on iPhone, finish “Hear calls on iPhone → Set up” in the Android app"
+            case "dev_adb_offline": return "The Android phone is not connected to Wireless debugging (Wi-Fi must be on)"
+            case "dev_no_permission": return "Allow SIMBridge in Shizuku on the Android phone"
+            case "dev_unsupported": return "Call audio needs Android 11 or later"
+            case "audio_failed": return "Call audio could not start on the Android phone"
+            default: return "Android phone error (\(code))"
             }
         }
     }
@@ -195,7 +195,7 @@ final class BridgeClient {
         let endpoints = candidates()
         guard !endpoints.isEmpty else {
             state = .connecting
-            fail("آدرسی برای گوشی اندروید پیدا نشد. هر دو گوشی باید روی یک Wi-Fi باشند.")
+            fail("Android phone not found. Both phones must be on the same Wi-Fi.")
             return
         }
         state = .connecting
@@ -211,7 +211,7 @@ final class BridgeClient {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
             guard let self, gen == self.generation, self.conn == nil else { return }
-            self.fail("گوشی اندروید در دسترس نیست")
+            self.fail("Android phone unavailable")
         }
     }
 
@@ -238,7 +238,7 @@ final class BridgeClient {
         case .failed:
             c.cancel()
             racing.removeAll { $0 === c }
-            if racing.isEmpty && conn == nil { fail("گوشی اندروید در دسترس نیست") }
+            if racing.isEmpty && conn == nil { fail("Android phone unavailable") }
         case .waiting:
             // Not fatal (e.g. Local Network permission pending, Wi-Fi joining). The attempt timeout decides.
             break
@@ -263,7 +263,7 @@ final class BridgeClient {
     private func connectionLost() {
         guard conn != nil else { return }
         teardown()
-        fail("ارتباط قطع شد")
+        fail("Connection lost")
     }
 
     private func fail(_ reason: String) {

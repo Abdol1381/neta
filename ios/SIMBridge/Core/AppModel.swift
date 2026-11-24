@@ -11,7 +11,8 @@ enum PairingStage: Equatable {
     case failed(String)
 }
 
-enum AppTab: Hashable { case home, messages, phone, contacts, settings }
+/// Tabs, laid out like the iPhone's Messages + Phone apps.
+enum AppTab: Hashable { case messages, calls, contacts, keypad, settings }
 
 /// Single source of truth for the UI. All mutations happen on the main thread.
 final class AppModel: ObservableObject {
@@ -37,7 +38,16 @@ final class AppModel: ObservableObject {
     @Published private(set) var loadingThreads = false
     @Published var pairingStage: PairingStage = .idle
     @Published var toast: String?
-    @Published var tab: AppTab = .home
+    @Published var tab: AppTab = .messages
+    /// Missed calls newer than this (ms) count toward the Calls tab badge, like the Phone app.
+    @Published private(set) var missedSeenAt: Int64 = Int64(UserDefaults.standard.double(forKey: "missedSeenAt"))
+
+    func markMissedSeen() {
+        let latest = recents.first?.date ?? Int64(Date().timeIntervalSince1970 * 1000)
+        guard latest > missedSeenAt else { return }
+        missedSeenAt = latest
+        UserDefaults.standard.set(Double(latest), forKey: "missedSeenAt")
+    }
     @Published var callScreenMinimized = false
     /// Call downlink audio is playing on the iPhone (developer mode on Android).
     @Published private(set) var listening = false
@@ -151,7 +161,7 @@ final class AppModel: ObservableObject {
     func setForwarding(subId: Int?, mode: String, _ done: ((Bool) -> Void)? = nil) {
         let number = sipAccount?.lineNumber ?? ""
         if mode != "off" && number.filter(\.isNumber).count < 5 {
-            toast = "اول شماره خط تلفن اینترنتی را در تنظیمات خط وارد کنید"
+            toast = "Enter the internet line's phone number first"
             done?(false)
             return
         }
@@ -163,8 +173,8 @@ final class AppModel: ObservableObject {
             case .success:
                 self.forwarding[String(subId ?? -1)] = mode
                 UserDefaults.standard.set(self.forwarding, forKey: "forwarding")
-                self.toast = mode == "off" ? "انتقال تماس لغو شد (تأیید اپراتور روی گوشی اندروید نمایش داده می‌شود)"
-                                           : "انتقال تماس درخواست شد (تأیید اپراتور روی گوشی اندروید نمایش داده می‌شود)"
+                self.toast = mode == "off" ? "Call forwarding turned off (the carrier confirms on the Android phone)"
+                                           : "Call forwarding requested (the carrier confirms on the Android phone)"
                 done?(true)
             case .failure(let e):
                 self.report(e)
@@ -175,7 +185,7 @@ final class AppModel: ObservableObject {
 
     /// Outgoing call through the internet line.
     func dialVoip(_ number: String) {
-        if !sip.startCall(number) { toast = "خط تلفن اینترنتی وصل نیست" }
+        if !sip.startCall(number) { toast = "Internet line not connected" }
     }
 
     private func setupCallKit() {
@@ -296,17 +306,17 @@ final class AppModel: ObservableObject {
     private func rejected(_ code: String) {
         switch code {
         case "denied":
-            pairingStage = .failed("درخواست اتصال روی گوشی اندروید رد شد.")
+            pairingStage = .failed("The request was declined on the Android phone.")
             client.reset()
         case "pairing_closed":
-            pairingStage = .failed("این کد QR منقضی شده است. در اپ اندروید «اتصال آیفون» را دوباره بزنید و کد جدید را اسکن کنید.")
+            pairingStage = .failed("This QR code has expired. Tap “Connect iPhone” again in the Android app and scan the new code.")
             client.reset()
         case "unknown_device":
             if pairing != nil {
-                toast = "این آیفون در گوشی اندروید حذف شده است. لطفاً دوباره جفت کنید."
+                toast = "This iPhone was removed on the Android phone. Please pair again."
                 unpair()
             } else {
-                pairingStage = .failed("اتصال پذیرفته نشد.")
+                pairingStage = .failed("The connection was not accepted.")
             }
         default:
             break
@@ -687,7 +697,7 @@ final class AppModel: ObservableObject {
         default: status = "failed"; outgoing.removeValue(forKey: ref)
         }
         setLocalStatus(threadId: o.threadId, localId: o.localId, status: status)
-        if state == "failed" { toast = "ارسال پیامک به \(Phone.iso(o.address)) ناموفق بود" }
+        if state == "failed" { toast = "Message to \(o.address) not delivered" }
         if state == "sent", let tid = o.threadId {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard let self, self.openThreadId == tid else { return }
@@ -836,13 +846,13 @@ final class AppModel: ObservableObject {
             switch kind {
             case "sms": tab = .messages
             case "call": callScreenMinimized = false
-            case "missed": tab = .phone
+            case "missed": tab = .calls
             default: break
             }
             completion()
             return
         case Notifier.actCallback:
-            tab = .phone
+            tab = .calls
             if let n = userInfo["number"] as? String, !n.isEmpty {
                 client.ensureReady(timeout: 8) { [weak self] ok in
                     if ok { self?.dial(n) }
@@ -858,7 +868,7 @@ final class AppModel: ObservableObject {
         client.ensureReady(timeout: 12) { [weak self] ok in
             guard let self else { completion(); return }
             guard ok else {
-                Notifier.postInfo("ارسال نشد", "گوشی اندروید در دسترس نبود.")
+                Notifier.postInfo("Not Sent", "The Android phone was unavailable.")
                 completion()
                 return
             }
@@ -872,7 +882,7 @@ final class AppModel: ObservableObject {
                 let sub = userInfo["subId"] as? Int
                 let tid = self.threads.first { Phone.same($0.address, address) }?.threadId
                 self.sendSms(to: address, body: text ?? "", subId: (sub ?? -1) >= 0 ? sub : nil, threadId: tid) { ok in
-                    if !ok { Notifier.postInfo("پیامک ارسال نشد", Phone.ltr(address)) }
+                    if !ok { Notifier.postInfo("Message Not Sent", address) }
                     completion()
                 }
             default:
@@ -896,10 +906,10 @@ final class AppModel: ObservableObject {
         return sims.first { $0.voiceSim } ?? sims.first
     }
 
-    /// "سیم ۲ · ایرانسل" on dual-SIM phones, nil otherwise.
+    /// "SIM 2 · Irancell" on dual-SIM phones, nil otherwise.
     func simLabel(_ subId: Int?) -> String? {
         guard sims.count > 1, let id = subId, id >= 0, let s = sims.first(where: { $0.subId == id }) else { return nil }
-        return "سیم \(Fmt.persianDigits(String(s.slot + 1))) · \(s.title)"
+        return "SIM \(s.slot + 1) · \(s.title)"
     }
 
     // MARK: - Names (iPhone contacts first, then the Android phone's contacts)

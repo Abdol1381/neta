@@ -22,11 +22,11 @@ struct SimInfo: Codable, Identifiable, Equatable {
 
     var serviceText: String {
         switch service {
-        case "in": return "در سرویس"
-        case "out": return "بدون آنتن"
-        case "emergency": return "فقط اضطراری"
-        case "off": return "رادیو خاموش"
-        default: return "در حال بررسی"
+        case "in": return "In service"
+        case "out": return "No service"
+        case "emergency": return "SOS only"
+        case "off": return "Radio off"
+        default: return "Searching…"
         }
     }
 }
@@ -61,7 +61,7 @@ struct CallInfo: Codable, Equatable {
 
     static let idle = CallInfo(state: "idle", number: "", name: "", direction: "", since: 0)
     var isIdle: Bool { state == "idle" }
-    var display: String { !name.isEmpty ? name : (!number.isEmpty ? number : "شماره نامشخص") }
+    var display: String { !name.isEmpty ? name : (!number.isEmpty ? number : "Unknown") }
 }
 
 struct SmsMessage: Codable, Identifiable, Equatable {
@@ -98,7 +98,7 @@ struct CallLogEntry: Codable, Identifiable, Equatable {
     var duration: Int64
     var type: String       // in / out / missed / rejected / blocked / other
 
-    var title: String { name.isEmpty ? (number.isEmpty ? "ناشناس" : number) : name }
+    var title: String { name.isEmpty ? (number.isEmpty ? "Unknown" : number) : name }
 }
 
 struct Contact: Codable, Identifiable, Equatable {

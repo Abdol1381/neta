@@ -6,8 +6,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        // Persian UI: mirror UIKit chrome (navigation & tab bars) even if the iPhone language is English.
-        UIView.appearance().semanticContentAttribute = .forceRightToLeft
         AppModel.shared.launch()
         return true
     }
@@ -40,9 +38,8 @@ struct SIMBridgeApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(model)
-                .environment(\.layoutDirection, .rightToLeft)
-                .environment(\.locale, Locale(identifier: "fa_IR"))
-                .tint(Theme.indigo)
+                .environment(\.layoutDirection, .leftToRight)
+                .environment(\.locale, Locale(identifier: "en_US"))
                 .onChange(of: phase) { p in
                     switch p {
                     case .active: model.enterForeground()

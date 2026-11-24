@@ -10,7 +10,7 @@ struct CallScreen: View {
     private var call: CallInfo { model.call }
     private var ringing: Bool { call.state == "ringing" }
     private var title: String {
-        call.name.isEmpty ? Phone.ltr(call.number.isEmpty ? "شماره نامشخص" : call.number) : call.name
+        call.name.isEmpty ? (call.number.isEmpty ? "Unknown" : call.number) : call.name
     }
 
     var body: some View {
@@ -29,7 +29,7 @@ struct CallScreen: View {
                     if let sim = model.sim(for: call.subId) {
                         HStack(spacing: 6) {
                             SignalBarsView(level: sim.level, inService: sim.inService, height: 12, barWidth: 3.5)
-                            Text(model.sims.count > 1 ? "سیم \(Fmt.persianDigits(String(sim.slot + 1))) · \(sim.title)" : sim.title)
+                            Text(model.sims.count > 1 ? "SIM \(sim.slot + 1) · \(sim.title)" : sim.title)
                                 .font(.footnote.weight(.semibold))
                         }
                         .padding(.horizontal, 12)
@@ -54,7 +54,7 @@ struct CallScreen: View {
                         .foregroundStyle(.white.opacity(0.75))
                         .monospacedDigit()
                     if !call.name.isEmpty && !call.number.isEmpty {
-                        Text(Phone.ltr(call.number)).font(.subheadline).foregroundStyle(.white.opacity(0.55))
+                        Text(call.number).font(.subheadline).foregroundStyle(.white.opacity(0.55))
                     }
                 }
                 .padding(.horizontal, 24)
@@ -96,17 +96,17 @@ struct CallScreen: View {
     }
 
     private var audioHint: String {
-        if model.listening { return "صدای طرف مقابل روی آیفون · صحبت با گوشی اندروید یا هدست آن" }
-        return "صدای مکالمه روی گوشی اندروید است"
+        if model.listening { return "Hearing the call on iPhone · speak into the Android phone or its headset" }
+        return "Call audio is on the Android phone"
     }
 
     private var statusLine: String {
         switch call.state {
-        case "ringing": return "تماس ورودی…"
+        case "ringing": return "incoming call…"
         case "offhook":
-            guard call.since > 0 else { return call.direction == "out" ? "در حال برقراری…" : "در حال تماس" }
+            guard call.since > 0 else { return call.direction == "out" ? "calling…" : "connecting…" }
             return Fmt.duration(Int64(now.timeIntervalSince(Fmt.date(call.since))))
-        default: return "پایان تماس"
+        default: return "call ended"
         }
     }
 
@@ -118,7 +118,7 @@ struct CallScreen: View {
                 busy = true
                 model.answer(speaker: true) { _ in busy = false }
             } label: {
-                Label("پاسخ با بلندگوی اندروید", systemImage: "speaker.wave.2.fill")
+                Label("Answer on Android Speaker", systemImage: "speaker.wave.2.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
@@ -127,12 +127,12 @@ struct CallScreen: View {
             }
             .disabled(busy)
             HStack {
-                bigButton("رد", "phone.down.fill", IOSColor.callRed) {
+                bigButton("Decline", "phone.down.fill", IOSColor.callRed) {
                     busy = true
                     model.endCall { _ in busy = false }
                 }
                 Spacer()
-                bigButton("پاسخ", "phone.fill", IOSColor.callGreen) {
+                bigButton("Accept", "phone.fill", IOSColor.callGreen) {
                     busy = true
                     model.answer(speaker: false) { _ in busy = false }
                 }
@@ -147,14 +147,14 @@ struct CallScreen: View {
         VStack(spacing: 30) {
             GlassGroup {
                 HStack(spacing: 26) {
-                    control("بی‌صدا", model.muted ? "mic.slash.fill" : "mic.slash", model.muted) { model.toggleMute() }
+                    control("mute", model.muted ? "mic.slash.fill" : "mic.slash", model.muted) { model.toggleMute() }
                     if model.listening {
-                        control("بلندگو", "speaker.wave.3.fill", model.iphoneSpeaker) { model.toggleIphoneSpeaker() }
+                        control("speaker", "speaker.wave.3.fill", model.iphoneSpeaker) { model.toggleIphoneSpeaker() }
                     } else {
-                        control("بلندگوی اندروید", "speaker.wave.3.fill", model.speakerOn) { model.toggleSpeaker() }
+                        control("Android speaker", "speaker.wave.3.fill", model.speakerOn) { model.toggleSpeaker() }
                     }
                     if model.canListen {
-                        control("شنیدن", model.listening ? "ear.fill" : "ear", model.listening) { model.setListening(!model.listening) }
+                        control("listen", model.listening ? "ear.fill" : "ear", model.listening) { model.setListening(!model.listening) }
                     }
                 }
             }
