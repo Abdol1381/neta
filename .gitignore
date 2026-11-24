@@ -8,3 +8,5 @@ DerivedData/
 xcuserdata/
 /SIMBridge-android.apk
 android/local-build.log
+hs_err_pid*.log
+replay_pid*.log
