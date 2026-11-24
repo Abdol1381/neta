@@ -49,6 +49,7 @@ final class CallAudioPlayer {
             do {
                 try s.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
                 try s.setActive(true)
+                try? s.overrideOutputAudioPort(.none)
             } catch {
                 dlog("audio session \(error)")
             }

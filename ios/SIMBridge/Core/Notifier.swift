@@ -77,6 +77,18 @@ enum Notifier {
         add("missed.\(number).\(Date().timeIntervalSince1970)", c)
     }
 
+    /// "Remind Me" on the ringing screen.
+    static func postCallReminder(number: String, name: String, after seconds: TimeInterval) {
+        let c = UNMutableNotificationContent()
+        c.title = "Call " + (name.isEmpty ? Phone.ltr(number.isEmpty ? "back" : number) : name)
+        c.body = "Reminder from a missed call"
+        c.sound = .default
+        c.categoryIdentifier = catMissed
+        c.userInfo = ["kind": "missed", "number": number]
+        center.add(UNNotificationRequest(identifier: "remind.\(number).\(Date().timeIntervalSince1970)", content: c,
+                                         trigger: UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)))
+    }
+
     static func postInfo(_ title: String, _ body: String) {
         let c = UNMutableNotificationContent()
         c.title = title

@@ -71,7 +71,7 @@ class BridgeService : Service() {
             BridgeHub.wakeClients()
         }
         BridgeHub.audio.onStateChanged = { main.post { monitor.rebuild() } }
-        BridgeHub.onCallEnded = { BridgeHub.audio.stop("call_ended") }
+        BridgeHub.onCallEnded = { wantAudio = false; BridgeHub.audio.stop("call_ended") }
         BridgeHub.refreshTelephony = {
             main.post {
                 contacts.clearCache()
@@ -211,6 +211,7 @@ class BridgeService : Service() {
             "calls" -> JSONObject().put("calls", calls.callLog(req.optInt("limit", 100).coerceIn(1, 500)))
             "listen" -> {
                 if (!req.optBoolean("on")) {
+                    wantAudio = false
                     BridgeHub.audio.stop()
                     JSONObject().put("on", false)
                 } else {
@@ -218,14 +219,19 @@ class BridgeService : Service() {
                     val st = BridgeHub.audio.state.value
                     if (st != "ready") throw BridgeError("dev_$st")
                     if (BridgeHub.call.value.state != "offhook") throw BridgeError("no_call")
-                    if (BridgeHub.audio.running) BridgeHub.audio.stop("restart")
+                    wantAudio = true
                     audioRestarts = 0
-                    try {
-                        startRelay()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "listen start", e)
-                        BridgeHub.log("call audio failed to start: ${e.message}")
-                        throw BridgeError("audio_failed")
+                    // Already streaming: never interrupt it (the iPhone may ask again after a reconnect).
+                    if (!(BridgeHub.audio.running && BridgeHub.audio.flowing)) {
+                        if (BridgeHub.audio.running) BridgeHub.audio.stop("restart")
+                        try {
+                            startRelay()
+                        } catch (e: Exception) {
+                            Log.w(TAG, "listen start", e)
+                            BridgeHub.log("call audio failed to start: ${e.message}")
+                            scheduleRelayRestart()
+                            throw BridgeError("audio_failed")
+                        }
                     }
                     JSONObject().put("on", true).put("lockSecure", BridgeHub.audio.lockSecure)
                 }
@@ -243,31 +249,45 @@ class BridgeService : Service() {
     }
 
     @Volatile private var audioRestarts = 0
+    /** The iPhone wants the call audio for the current call (cleared when the call ends). */
+    @Volatile private var wantAudio = false
 
-    /** Streams call audio; if capture stops on its own during the call, restarts it (up to 4 times). */
+    /**
+     * Streams call audio. If capture stops by itself during the call it is restarted for as long as the
+     * call lasts (short back-off), so the iPhone simply keeps hearing the call.
+     */
     private fun startRelay() {
         BridgeHub.audio.start(
             onPcm = { pcm ->
+                audioRestarts = 0
                 BridgeHub.broadcast(JSONObject().put("t", "audio").put("d", android.util.Base64.encodeToString(pcm, android.util.Base64.NO_WRAP)))
             },
             onEnd = { reason ->
-                val inCall = BridgeHub.call.value.state == "offhook"
-                if (reason != null && inCall && audioRestarts < 4) {
-                    audioRestarts++
-                    BridgeHub.log("call audio restarting ($audioRestarts)")
-                    main.postDelayed({
-                        Thread {
-                            try { if (BridgeHub.call.value.state == "offhook") startRelay() } catch (e: Exception) {
-                                BridgeHub.log("call audio restart failed: ${e.message}")
-                                BridgeHub.broadcast(JSONObject().put("t", "listen").put("on", false).put("reason", "failed"))
-                            }
-                        }.start()
-                    }, 800)
-                } else {
-                    BridgeHub.broadcast(JSONObject().put("t", "listen").put("on", false).put("reason", reason ?: "stopped"))
-                }
+                if (reason != null && wantAudio && BridgeHub.call.value.state == "offhook") scheduleRelayRestart()
             },
         )
+    }
+
+    private fun scheduleRelayRestart() {
+        if (!wantAudio || BridgeHub.call.value.state != "offhook") return
+        audioRestarts++
+        val delay = when {
+            audioRestarts <= 2 -> 600L
+            audioRestarts <= 6 -> 1500L
+            else -> 3000L
+        }
+        BridgeHub.log("call audio restarting ($audioRestarts) in ${delay}ms")
+        main.postDelayed({
+            Thread {
+                if (!wantAudio || BridgeHub.call.value.state != "offhook" || BridgeHub.audio.running) return@Thread
+                try {
+                    startRelay()
+                } catch (e: Exception) {
+                    BridgeHub.log("call audio restart failed: ${e.message}")
+                    scheduleRelayRestart()
+                }
+            }.start()
+        }, delay)
     }
 
     /** Audio routing calls are safest on the main thread. */

@@ -58,9 +58,6 @@ final class AppModel: ObservableObject {
         iphoneSpeaker.toggle()
         audioPlayer.setSpeaker(iphoneSpeaker)
     }
-    @Published var autoListen: Bool = UserDefaults.standard.object(forKey: "autoListen") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(autoListen, forKey: "autoListen") }
-    }
     let audioPlayer = CallAudioPlayer()
     let callKit = CallKitManager()
     let keeper = BackgroundKeeper()
@@ -84,8 +81,8 @@ final class AppModel: ObservableObject {
 
     /// Back to the inaudible loop after call audio / a CallKit call released the audio session.
     private func resumeKeeper() {
-        guard keepConnected, pairing != nil || sipAccount?.isComplete == true, !listening, !callKit.hasCall, !sip.hasCall,
-              !TestHooks.isActive else { return }
+        guard keepConnected, pairing != nil || sipAccount?.isComplete == true, call.isIdle, !listening, !callKit.hasCall,
+              !sip.hasCall, !TestHooks.isActive else { return }
         // In the background the app has only seconds before iOS suspends it once audio stopped:
         // hold a background task while the silent loop takes over again.
         if !isForeground { beginBackgroundTask(seconds: 20) }
@@ -145,7 +142,7 @@ final class AppModel: ObservableObject {
         startWatchdog()
         keeper.mayTouchSession = { [weak self] in
             guard let self else { return true }
-            return !self.listening && !self.callKit.hasCall && !self.sip.hasCall && !self.audioPlayer.running
+            return self.call.isIdle && !self.listening && !self.callKit.hasCall && !self.sip.hasCall && !self.audioPlayer.running
         }
         sip.onChange = { [weak self] in
             guard let self else { return }
@@ -219,7 +216,10 @@ final class AppModel: ObservableObject {
         callKit.onAudioDeactivated = { [weak self] in
             guard let self else { return }
             self.audioPlayer.stop()
-            if self.listening { self.audioPlayer.start() } else { self.resumeKeeper() }
+            if self.listening && self.call.state == "offhook" {
+                self.audioPlayer.start()
+                self.audioPlayer.setSpeaker(self.iphoneSpeaker)
+            } else { self.resumeKeeper() }
         }
     }
 
@@ -520,9 +520,9 @@ final class AppModel: ObservableObject {
             }
         case "listen":
             if body["on"] as? Bool == false {
-                dlog("call audio stopped on Android: \(body["reason"] as? String ?? "?")")
-                stopListeningLocally()
-                if isForeground { toast = "Call audio stopped on the Android phone" }
+                // Keep the engine and route; the watchdog asks again in a moment.
+                dlog("call audio paused on Android: \(body["reason"] as? String ?? "?")")
+                lastAudioAt = .distantPast
             }
         case "sms_status":
             guard let ref = body["ref"] as? String, let state = body["state"] as? String else { return }
@@ -558,13 +558,13 @@ final class AppModel: ObservableObject {
         }
         if c.state != "ringing" { Notifier.removeIncomingCall() }
         if c.state == "offhook" && prev.state == "idle" { callScreenMinimized = false }
-        if c.state != "offhook" { listenOffByUser = false }
-        if c.state == "offhook" && prev.state != "offhook" && autoListen && canListen && !listening {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let self, self.call.state == "offhook", !self.listening else { return }
-                self.setListening(true)
-            }
+        // Outgoing calls also go through the iPhone's call system (CallKit): proper call audio session
+        // (never the loudspeaker by surprise), green pill / Dynamic Island, and the app stays alive.
+        if c.state == "offhook" && prev.state == "idle" && c.direction == "out" && useCallKit && !TestHooks.isActive {
+            callKit.startOutgoing(number: c.number, name: c.name)
         }
+        if c.state == "offhook" && c.since > 0 { callKit.outgoingConnected() }
+        if c.state == "offhook" && !listening && canListen { startCallAudio() }
         if c.isIdle && !prev.isIdle {
             callKit.ended(missed: prev.state == "ringing")
             stopListeningLocally()
@@ -782,12 +782,12 @@ final class AppModel: ObservableObject {
 
     private var watchdog: Timer?
     private var lastAudioAt = Date.distantPast
-    private var audioRetries = 0
+    private var lastAudioRequest = Date.distantPast
 
-    /// Every 3 s: keep the silent loop alive in always-connected mode, reconnect a dropped link, and
-    /// re-request call audio if it stalled during a call.
+    /// Every 2 s: keep the silent loop alive in always-connected mode, reconnect a dropped link, and
+    /// keep the call audio flowing for as long as a call lasts.
     private func startWatchdog() {
-        watchdog = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.tick() }
+        watchdog = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.tick() }
     }
 
     private func tick() {
@@ -801,53 +801,43 @@ final class AppModel: ObservableObject {
             if case .failed = conn { client.kick() }
             if case .idle = conn { client.kick() }
         }
-        if listening && call.state == "offhook" && conn.isReady && Date().timeIntervalSince(lastAudioAt) > 6 && audioRetries < 4 {
-            audioRetries += 1
-            dlog("watchdog: no call audio for 6 s, asking Android again (\(audioRetries))")
-            lastAudioAt = Date()
-            client.request("listen", ["on": true], timeout: 25) { _ in }
-        }
-        if call.isIdle { audioRetries = 0 }
-        // Auto-play: also when the Android side became ready after the call had started.
-        if call.isIdle { autoListenTries = 0 }
-        if autoListen && canListen && !listening && !listenOffByUser && call.state == "offhook" && conn.isReady
-            && Date().timeIntervalSince(lastAutoListen) > 8 && autoListenTries < 2 {
-            lastAutoListen = Date()
-            autoListenTries += 1
-            dlog("watchdog: auto-play call audio")
-            setListening(true)
+        guard call.state == "offhook" else { return }
+        // Android became ready mid-call: start now.
+        if !listening && canListen { startCallAudio() }
+        // No audio for a while (capture restarting, link was down…): ask again, quietly.
+        if listening && conn.isReady && Date().timeIntervalSince(lastAudioAt) > 4
+            && Date().timeIntervalSince(lastAudioRequest) > 5 {
+            dlog("watchdog: no call audio, asking Android again")
+            requestCallAudio()
         }
     }
-    private var listenOffByUser = false
-    private var lastAutoListen = Date.distantPast
-    private var autoListenTries = 0
 
-    // MARK: - Listen on iPhone
+    // MARK: - Call audio on iPhone (automatic, always on during calls)
 
-    func setListening(_ on: Bool) {
-        dlog("listen \(on ? "on" : "off")")
-        if !on && call.state == "offhook" { listenOffByUser = true }
-        if on {
-            lastAudioAt = Date()
-            if callKit.hasCall && callKit.answeredHere {
-                // CallKit owns the session; the engine starts (or already runs) on activation.
-                if callKit.audioActive { audioPlayer.start(managedByCallKit: true) }
-            } else {
-                audioPlayer.start()
-            }
-            listening = true
+    /// Starts with every call and stays on until the call ends: the engine keeps running (silence
+    /// while nothing arrives), so the route never changes and nothing flips on and off.
+    private func startCallAudio() {
+        guard !listening, call.state == "offhook", canListen else { return }
+        dlog("call audio: on")
+        listening = true
+        iphoneSpeaker = false
+        lastAudioAt = Date()
+        if callKit.hasCall && callKit.answeredHere {
+            // CallKit owns the session; the engine starts (or already runs) on activation.
+            if callKit.audioActive { audioPlayer.start(managedByCallKit: true) }
+        } else {
+            audioPlayer.start()
         }
-        client.request("listen", ["on": on], timeout: 25) { [weak self] r in
-            guard let self else { return }
-            switch r {
-            case .success(let d):
-                if d["on"] as? Bool != true { self.stopListeningLocally() }
-            case .failure(let e):
-                self.stopListeningLocally()
-                if on { self.report(e) }
-            }
+        audioPlayer.setSpeaker(false) // always the earpiece (or AirPods) first, like a phone call
+        requestCallAudio()
+    }
+
+    private func requestCallAudio() {
+        guard conn.isReady, call.state == "offhook" else { return }
+        lastAudioRequest = Date()
+        client.request("listen", ["on": true], timeout: 25) { r in
+            if case .failure(let e) = r { dlog("call audio request failed: \(e)") }
         }
-        if !on { stopListeningLocally() }
     }
 
     private func stopListeningLocally() {
@@ -861,6 +851,24 @@ final class AppModel: ObservableObject {
         // Back in the background without audio: release the connection shortly, as usual.
         if !isForeground { beginBackgroundTask(seconds: 3) }
     }
+
+    /// Ringing screen → "Remind Me": a reminder to call back in an hour.
+    func remindMe(_ c: CallInfo) {
+        Notifier.postCallReminder(number: c.number, name: c.name, after: 3600)
+        toast = "You'll be reminded in 1 hour"
+    }
+
+    /// Ringing screen → "Message": decline and open a new message to the caller.
+    func declineWithMessage(_ c: CallInfo) {
+        let number = c.number
+        endCall()
+        guard !number.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.tab = .messages
+            self?.pendingCompose = number
+        }
+    }
+    @Published var pendingCompose: String?
 
     func answer(speaker: Bool = false, _ done: ((Bool) -> Void)? = nil) {
         client.request("answer", ["speaker": speaker]) { [weak self] r in

@@ -227,7 +227,6 @@ struct HearCallsView: View {
                     Spacer()
                     Text(model.canListen ? "Ready" : "Not Ready").foregroundStyle(model.canListen ? Theme.good : Theme.fair)
                 }
-                Toggle("Play Automatically During Calls", isOn: $model.autoListen)
                 if model.status?.lockSecure == true {
                     Label("The Android phone has a PIN/pattern screen lock. On Android 11, call audio can only start while it's unlocked — set its screen lock to None or Swipe (Settings → Security → Screen lock).",
                           systemImage: "lock.fill")

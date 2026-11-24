@@ -27,6 +27,10 @@ struct RootView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: model.toast)
         .animation(.easeInOut, value: model.pairing == nil)
+        .sheet(item: Binding(get: { model.pendingCompose.map { ComposeTarget(number: $0) } },
+                             set: { model.pendingCompose = $0?.number })) { t in
+            ComposeView(initialNumber: t.number).environmentObject(model)
+        }
         .fullScreenCover(isPresented: callScreenBinding) {
             CallScreen()
                 .dynamicTypeSize(...DynamicTypeSize.xxLarge)

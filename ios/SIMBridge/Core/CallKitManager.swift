@@ -11,6 +11,8 @@ final class CallKitManager: NSObject {
     private(set) var currentId: UUID?
     private(set) var answeredHere = false
     private(set) var audioActive = false
+    private(set) var outgoing = false
+    private var connectedReported = false
 
     var onAnswer: ((@escaping (Bool) -> Void) -> Void)?
     var onEnd: ((@escaping (Bool) -> Void) -> Void)?
@@ -61,10 +63,50 @@ final class CallKitManager: NSObject {
         }
     }
 
+    /// Puts an outgoing Android call into the iPhone's call system. The in-app screen stays the UI; iOS
+    /// adds the green pill / Dynamic Island and manages the call audio session.
+    func startOutgoing(number: String, name: String) {
+        guard currentId == nil else { return }
+        let id = UUID()
+        let handle = CXHandle(type: .phoneNumber, value: number.isEmpty ? "—" : number)
+        currentId = id
+        answeredHere = true
+        outgoing = true
+        connectedReported = false
+        configureAudioSession()
+        controller.request(CXTransaction(action: CXStartCallAction(call: id, handle: handle))) { [weak self] error in
+            DispatchQueue.main.async {
+                guard let self, self.currentId == id else { return }
+                if let error {
+                    dlog("callkit outgoing refused: \(error)")
+                    self.reset()
+                    return
+                }
+                let u = CXCallUpdate()
+                u.remoteHandle = handle
+                u.localizedCallerName = name.isEmpty ? nil : name
+                u.hasVideo = false
+                u.supportsHolding = false
+                u.supportsGrouping = false
+                u.supportsUngrouping = false
+                u.supportsDTMF = false
+                self.provider.reportCall(with: id, updated: u)
+                dlog("callkit outgoing started")
+            }
+        }
+    }
+
+    /// The other side picked up.
+    func outgoingConnected() {
+        guard let id = currentId, outgoing, !connectedReported else { return }
+        connectedReported = true
+        provider.reportOutgoingCall(with: id, connectedAt: Date())
+    }
+
     /// The Android call was answered somewhere other than this CallKit screen (on Android, or with the
     /// in-app button): dismiss the native ringing UI.
     func answeredElsewhere() {
-        guard let id = currentId, !answeredHere else { return }
+        guard let id = currentId, !answeredHere, !outgoing else { return }
         provider.reportCall(with: id, endedAt: Date(), reason: .answeredElsewhere)
         reset()
     }
@@ -86,6 +128,8 @@ final class CallKitManager: NSObject {
         currentId = nil
         answeredHere = false
         audioActive = false
+        outgoing = false
+        connectedReported = false
     }
 
     private func configureAudioSession() {
@@ -110,6 +154,12 @@ extension CallKitManager: CXProviderDelegate {
                 action.fail()
             }
         }
+    }
+
+    func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+        guard action.callUUID == currentId else { action.fail(); return }
+        provider.reportOutgoingCall(with: action.callUUID, startedConnectingAt: Date())
+        action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {

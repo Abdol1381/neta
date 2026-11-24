@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// In-app call screen in the style of the iPhone's own call UI (iOS 26 Liquid Glass controls).
+/// In-app call screen laid out like the iPhone's own (iOS 26): status above the name, a 3 × 2 grid of
+/// glass buttons with the red End button in the middle, and Remind Me / Message above Decline / Accept
+/// while ringing. Call audio is automatic — there is nothing to switch on.
 struct CallScreen: View {
     @EnvironmentObject var model: AppModel
     @State private var now = Date()
@@ -10,7 +12,7 @@ struct CallScreen: View {
     private var call: CallInfo { model.call }
     private var ringing: Bool { call.state == "ringing" }
     private var title: String {
-        call.name.isEmpty ? (call.number.isEmpty ? "Unknown" : call.number) : call.name
+        call.name.isEmpty ? (call.number.isEmpty ? "Unknown" : Phone.ltr(call.number)) : call.name
     }
 
     var body: some View {
@@ -25,173 +27,191 @@ struct CallScreen: View {
                             .frame(width: 40, height: 40)
                             .glassCircle()
                     }
+                    .accessibilityLabel("Back to App")
                     Spacer()
-                    if let sim = model.sim(for: call.subId) {
-                        HStack(spacing: 6) {
-                            SignalBarsView(level: sim.level, inService: sim.inService, height: 12, barWidth: 3.5)
-                            Text(model.sims.count > 1 ? "SIM \(sim.slot + 1) · \(sim.title)" : sim.title)
-                                .font(.footnote.weight(.semibold))
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(height: 32)
-                        .glassCapsule()
-                    }
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
 
-                // Name block at the top, like the iOS call screen.
-                VStack(spacing: 6) {
+                // Status line above a large name, as in iOS 17 and later.
+                VStack(spacing: 4) {
+                    Text(statusLine)
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
                     Text(title)
-                        .font(.system(size: 36, weight: .regular))
+                        .font(.system(size: 40, weight: .regular))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
-                        .minimumScaleFactor(0.6)
-                    Text(statusLine)
-                        .font(.title3)
-                        .foregroundStyle(.white.opacity(0.75))
-                        .monospacedDigit()
+                        .minimumScaleFactor(0.5)
                     if !call.name.isEmpty && !call.number.isEmpty {
-                        Text(call.number).font(.subheadline).foregroundStyle(.white.opacity(0.55))
+                        Text(Phone.ltr(call.number)).font(.subheadline).foregroundStyle(.white.opacity(0.55))
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 36)
+                .padding(.top, 28)
 
                 Spacer()
 
-                if !ringing {
-                    Label(audioHint, systemImage: model.listening ? "ear" : "iphone.radiowaves.left.and.right")
-                        .multilineTextAlignment(.center)
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .glassCapsule()
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 28)
-                }
-
                 if ringing { ringingControls } else { activeControls }
             }
-            .padding(.bottom, 34)
+            .padding(.bottom, 40)
         }
         .onReceive(timer) { now = $0 }
         .preferredColorScheme(.dark)
+        .animation(.easeInOut(duration: 0.25), value: call.state)
     }
 
-    /// Soft dark gradient with a blurred monogram glow (contact-poster feel).
+    /// Dark gradient with a blurred monogram glow (contact-poster feel).
     private var background: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.10, green: 0.11, blue: 0.16), Color(red: 0.04, green: 0.04, blue: 0.07)],
+            LinearGradient(colors: [Color(red: 0.12, green: 0.13, blue: 0.18), Color(red: 0.03, green: 0.03, blue: 0.05)],
                            startPoint: .top, endPoint: .bottom)
             Avatar(name: call.name.isEmpty ? call.number : call.name, size: 420)
                 .blur(radius: 90)
-                .opacity(0.45)
+                .opacity(0.4)
                 .offset(y: -160)
         }
         .ignoresSafeArea()
     }
 
-    private var audioHint: String {
-        if model.listening { return "Hearing the call on iPhone · speak into the Android phone or its headset" }
-        return "Call audio is on the Android phone"
+    private var simLabel: String? {
+        guard let sim = model.sim(for: call.subId) else { return nil }
+        return model.sims.count > 1 ? "SIM \(sim.slot + 1) · \(sim.title)" : sim.title
     }
 
     private var statusLine: String {
         if !model.conn.isReady { return "reconnecting…" }
         switch call.state {
-        case "ringing": return "incoming call…"
+        case "ringing": return simLabel.map { "\($0) · mobile" } ?? "mobile"
         case "offhook":
             guard call.since > 0 else { return call.direction == "out" ? "calling…" : "connecting…" }
-            return Fmt.duration(Int64(now.timeIntervalSince(Fmt.date(call.since))))
-        default: return "call ended"
+            return Fmt.duration(Int64(max(0, now.timeIntervalSince(Fmt.date(call.since)))))
+        default: return "Call Ended"
         }
     }
 
-    // MARK: Ringing: decline / accept like iOS
+    // MARK: Ringing
 
     private var ringingControls: some View {
-        VStack(spacing: 26) {
-            Button {
-                busy = true
-                model.answer(speaker: true) { _ in busy = false }
-            } label: {
-                Label("Answer on Android Speaker", systemImage: "speaker.wave.2.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .frame(height: 40)
-                    .glassCapsule(interactive: true)
-            }
-            .disabled(busy)
+        VStack(spacing: 34) {
             HStack {
-                bigButton("Decline", "phone.down.fill", IOSColor.callRed) {
+                smallAction("Remind Me", "alarm.fill") {
+                    busy = true
+                    model.remindMe(call)
+                    model.endCall { _ in busy = false }
+                }
+                Spacer()
+                smallAction("Message", "message.fill") {
+                    busy = true
+                    model.declineWithMessage(call)
+                    busy = false
+                }
+            }
+            HStack {
+                circle("Decline", "phone.down.fill", tint: IOSColor.callRed) {
                     busy = true
                     model.endCall { _ in busy = false }
                 }
                 Spacer()
-                bigButton("Accept", "phone.fill", IOSColor.callGreen) {
+                circle("Accept", "phone.fill", tint: IOSColor.callGreen) {
                     busy = true
                     model.answer(speaker: false) { _ in busy = false }
                 }
             }
-            .padding(.horizontal, 44)
+        }
+        .padding(.horizontal, 44)
+        .disabled(busy)
+    }
+
+    private func smallAction(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 22))
+                Text(title).font(.footnote.weight(.medium))
+            }
+            .foregroundStyle(.white)
+            .frame(width: 92)
         }
     }
 
-    // MARK: In call: glass control grid + red end button
+    // MARK: In call: 3 × 2 grid
+
+    private var speakerOn: Bool { model.listening ? model.iphoneSpeaker : model.speakerOn }
 
     private var activeControls: some View {
-        VStack(spacing: 30) {
-            GlassGroup {
-                HStack(spacing: 26) {
-                    control("mute", model.muted ? "mic.slash.fill" : "mic.slash", model.muted) { model.toggleMute() }
-                    if model.listening {
-                        control("speaker", "speaker.wave.3.fill", model.iphoneSpeaker) { model.toggleIphoneSpeaker() }
-                    } else {
-                        control("Android speaker", "speaker.wave.3.fill", model.speakerOn) { model.toggleSpeaker() }
+        GlassGroup {
+            VStack(spacing: 22) {
+                HStack(spacing: 0) {
+                    circle("Speaker", speakerOn ? "speaker.wave.3.fill" : "speaker.wave.2.fill", on: speakerOn) {
+                        if model.listening { model.toggleIphoneSpeaker() } else { model.toggleSpeaker() }
                     }
-                    if model.canListen {
-                        control("listen", model.listening ? "ear.fill" : "ear", model.listening) { model.setListening(!model.listening) }
+                    Spacer()
+                    circle("FaceTime", "video.fill", enabled: false) {}
+                    Spacer()
+                    circle("Mute", model.muted ? "mic.slash.fill" : "mic.slash", on: model.muted) { model.toggleMute() }
+                }
+                HStack(spacing: 0) {
+                    moreMenu
+                    Spacer()
+                    circle("End", "phone.down.fill", tint: IOSColor.callRed) {
+                        busy = true
+                        model.endCall { _ in busy = false }
                     }
+                    .disabled(busy)
+                    Spacer()
+                    circle("Keypad", "circle.grid.3x3.fill", enabled: false) {}
                 }
             }
-            bigButton(nil, "phone.down.fill", IOSColor.callRed) {
-                busy = true
-                model.endCall { _ in busy = false }
-            }
+            .padding(.horizontal, 36)
         }
     }
 
-    private func bigButton(_ title: String?, _ icon: String, _ color: Color, action: @escaping () -> Void) -> some View {
+    /// "More": the Android phone's own loudspeaker (when the call audio plays on the Android phone).
+    private var moreMenu: some View {
         VStack(spacing: 8) {
-            Button(action: action) {
-                Image(systemName: icon)
-                    .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 76, height: 76)
-                    .glassCircle(tint: color)
-            }
-            .disabled(busy)
-            if let title { Text(title).font(.footnote.weight(.medium)).foregroundStyle(.white) }
-        }
-    }
-
-    private func control(_ title: String, _ icon: String, _ on: Bool, action: @escaping () -> Void) -> some View {
-        VStack(spacing: 8) {
-            Button(action: action) {
-                Image(systemName: icon)
+            Menu {
+                Button {
+                    model.toggleSpeaker()
+                } label: {
+                    Label(model.speakerOn ? "Turn Off Android Speaker" : "Android Speaker", systemImage: "speaker.wave.3")
+                }
+                Button {
+                    model.callScreenMinimized = true
+                } label: {
+                    Label("Back to App", systemImage: "square.grid.2x2")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
                     .font(.system(size: 26, weight: .medium))
-                    .foregroundStyle(on ? Color.black : Color.white)
-                    .frame(width: 76, height: 76)
-                    .glassCircle(tint: on ? .white : nil)
+                    .foregroundStyle(.white)
+                    .frame(width: 78, height: 78)
+                    .glassCircle()
             }
+            Text("More").font(.footnote).foregroundStyle(.white).lineLimit(1)
+        }
+        .frame(width: 86)
+    }
+
+    /// Round glass button with its label underneath. `on` fills it white like iOS's selected state.
+    private func circle(_ title: String, _ icon: String, on: Bool = false, tint: Color? = nil, enabled: Bool = true,
+                        action: @escaping () -> Void) -> some View {
+        VStack(spacing: 8) {
+            Button(action: action) {
+                Image(systemName: icon)
+                    .font(.system(size: tint == nil ? 26 : 30, weight: tint == nil ? .medium : .semibold))
+                    .foregroundStyle(on ? Color.black : Color.white)
+                    .frame(width: 78, height: 78)
+                    .glassCircle(tint: on ? .white : tint)
+            }
+            .disabled(!enabled)
             Text(title).font(.footnote).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
         }
-        .frame(width: 84)
+        .frame(width: 86)
+        .opacity(enabled ? 1 : 0.35)
     }
 }
 

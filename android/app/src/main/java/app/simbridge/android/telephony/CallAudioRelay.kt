@@ -32,6 +32,9 @@ class CallAudioRelay(private val context: Context) {
     private val lock = Any()
 
     val running: Boolean get() = process != null
+    @Volatile private var lastPcmAt = 0L
+    /** Audio arrived within the last 2 seconds. */
+    val flowing: Boolean get() = System.currentTimeMillis() - lastPcmAt < 2000
 
     /** A PIN / pattern / password lock: on Android 11 call audio can't start while locked. */
     val lockSecure: Boolean
@@ -150,7 +153,7 @@ class CallAudioRelay(private val context: Context) {
 
     private fun pump(p: ShellProc, onPcm: (ByteArray) -> Unit, onEnd: (String?) -> Unit) {
         var bytes = 0L
-        val mixer = Downmixer { chunk -> bytes += chunk.size; onPcm(chunk) }
+        val mixer = Downmixer { chunk -> bytes += chunk.size; lastPcmAt = System.currentTimeMillis(); onPcm(chunk) }
         val buf = ByteArray(7680)
         var reason: String? = "ended"
         try {
