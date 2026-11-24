@@ -29,6 +29,17 @@ xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null
 xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
 xcrun simctl install "$UDID" "$APP"
+# An iPhone-only contact (Persian digits in the number) to verify caller identification.
+cat > /tmp/simbridge_contact.vcf <<'VCF'
+BEGIN:VCARD
+VERSION:3.0
+N:صالحی;دکتر;;;
+FN:دکتر صالحی
+TEL;TYPE=CELL:۰۹۱۹ ۸۸۸ ۷۷۶۶
+END:VCARD
+VCF
+xcrun simctl addmedia "$UDID" /tmp/simbridge_contact.vcf || echo "addmedia failed"
+xcrun simctl privacy "$UDID" grant contacts $BUNDLE || echo "privacy grant failed"
 
 PAY=/tmp/simbridge_pair.txt
 SLOG="$OUT/fake_android_log.json"
@@ -80,6 +91,8 @@ has ready && pass "iOS reconnected with device key (CryptoKit <-> AES-GCM intero
 for r in sync threads messages contacts calls; do has request "$r" && pass "iOS requested $r" || fail "iOS requested $r"; done
 READY=$(python3 -c "import json; print(sum(1 for e in json.load(open('$SLOG')) if e['kind']=='ready'))")
 [ "$READY" -ge 5 ] && pass "pairing survives app restarts ($READY reconnects)" || fail "pairing lost after restart (only $READY reconnects)"
+if grep -qh "caller name: دکتر صالحی" "$OUT"/app_*.err.txt 2>/dev/null; then pass "incoming caller identified from iPhone contacts"; else fail "caller not identified from iPhone contacts"; fi
+if grep -qh "iPhone contacts indexed: [1-9]" "$OUT"/app_*.err.txt 2>/dev/null; then pass "iPhone contacts indexed"; else fail "iPhone contacts not indexed"; fi
 has request listen && pass "iOS auto-started listening during an active call" || fail "iOS did not request call audio"
 has audio_sent && pass "call audio streamed to the iPhone" || fail "call audio not streamed"
 has bad_auth && fail "server saw a bad auth frame" || pass "no bad auth frames"

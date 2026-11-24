@@ -25,7 +25,12 @@ final class AppModel: ObservableObject {
     @Published var muted = false
     @Published private(set) var threads: [SmsThread] = []
     @Published private(set) var messages: [Int64: [SmsMessage]] = [:]
+    /// iPhone + Android contacts, merged and de-duplicated by number.
     @Published private(set) var contacts: [Contact] = []
+    private var androidContacts: [Contact] = []
+    /// Phone.key -> name from the Android phone's contacts.
+    private var androidByKey: [String: String] = [:]
+    let iphoneContacts = IPhoneContacts()
     @Published private(set) var recents: [CallLogEntry] = []
     @Published private(set) var latencyMs: Int?
     @Published private(set) var bleConnected = false
@@ -71,12 +76,14 @@ final class AppModel: ObservableObject {
         client.onRejected = { [weak self] code in self?.rejected(code) }
         ble.onWake = { [weak self] in self?.handleWake() }
         ble.onConnectedChange = { [weak self] c in self?.bleConnected = c }
+        iphoneContacts.onChange = { [weak self] in self?.contactsChanged() }
     }
 
     // MARK: - Lifecycle
 
     func launch() {
         Notifier.setup()
+        iphoneContacts.reload()
         // iOS may relaunch the app in the background (Bluetooth state restoration). In that case stay
         // quiet: the BLE wake handler opens the connection only for as long as it is needed.
         isForeground = UIApplication.shared.applicationState != .background
@@ -147,6 +154,7 @@ final class AppModel: ObservableObject {
             if !TestHooks.isActive {
                 self.ble.start(serverId: p.serverId)
                 Notifier.requestAuthorization()
+                if self.iphoneContacts.status == .notDetermined { self.iphoneContacts.requestAccess() }
             }
         }
     }
@@ -180,7 +188,9 @@ final class AppModel: ObservableObject {
         call = .idle
         threads = []
         messages = [:]
-        contacts = []
+        contacts = iphoneContacts.list
+        androidContacts = []
+        androidByKey = [:]
         recents = []
         contactsLoaded = false
         pairingStage = .idle
@@ -313,7 +323,7 @@ final class AppModel: ObservableObject {
             if missedAfter == 0, serverTime > 0 { Notifier.lastMissedDate = serverTime }
             if let missed = JSONBridge.decode([CallLogEntry].self, d["missed"]) {
                 for m in missed.sorted(by: { $0.date < $1.date }) where m.date > Notifier.lastMissedDate {
-                    Notifier.postMissed(number: m.number, name: m.name)
+                    Notifier.postMissed(number: m.number, name: knownName(m.number, fallback: m.name))
                     Notifier.lastMissedDate = m.date
                 }
             }
@@ -333,7 +343,8 @@ final class AppModel: ObservableObject {
             let rejected = body["rejected"] as? Bool ?? false
             let date = (body["date"] as? NSNumber)?.int64Value ?? 0
             if !rejected && (date == 0 || date > Notifier.lastMissedDate) {
-                Notifier.postMissed(number: body["number"] as? String ?? "", name: body["name"] as? String ?? "")
+                let num = body["number"] as? String ?? ""
+                Notifier.postMissed(number: num, name: knownName(num, fallback: body["name"] as? String ?? ""))
             }
             // The call-log entry for this call may carry a slightly different timestamp.
             if date > 0 { Notifier.lastMissedDate = max(Notifier.lastMissedDate, date + 15_000) }
@@ -352,9 +363,12 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func apply(call c: CallInfo) {
+    private func apply(call raw: CallInfo) {
+        var c = raw
+        c.name = knownName(c.number, fallback: c.name)
         let prev = call
         call = c
+        if c.state == "ringing" { dlog("caller name: \(c.name)") }
         if c.state == "ringing" && prev.state != "ringing" {
             callScreenMinimized = false
             Notifier.postIncomingCall(c, simLabel: simLabel(c.subId))
@@ -376,7 +390,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func incoming(_ m: SmsMessage, live: Bool) {
+    private func incoming(_ raw: SmsMessage, live: Bool) {
+        var m = raw
+        m.name = knownName(m.address, fallback: m.name)
         let isOpen = isForeground && openThreadId != nil && threads.first(where: { $0.threadId == openThreadId })
             .map { Phone.same($0.address, m.address) } == true
         if Notifier.shouldNotify(m), !isOpen {
@@ -425,7 +441,7 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             self.loadingThreads = false
             if case .success(let d) = r, let list = JSONBridge.decode([SmsThread].self, d["threads"]) {
-                self.threads = list
+                self.threads = list.map(self.named)
             } else if case .failure(let e) = r {
                 self.report(e)
             }
@@ -454,8 +470,9 @@ final class AppModel: ObservableObject {
         client.request("contacts", timeout: 30) { [weak self] r in
             guard let self else { return }
             if case .success(let d) = r, let list = JSONBridge.decode([Contact].self, d["contacts"]) {
-                self.contacts = list
+                self.androidContacts = list
                 self.contactsLoaded = true
+                self.contactsChanged()
             }
         }
     }
@@ -464,7 +481,8 @@ final class AppModel: ObservableObject {
         guard conn.isReady else { return }
         client.request("calls", ["limit": 150]) { [weak self] r in
             if case .success(let d) = r, let list = JSONBridge.decode([CallLogEntry].self, d["calls"]) {
-                self?.recents = list
+                guard let self else { return }
+                self.recents = list.map(self.named)
             }
         }
     }
@@ -717,7 +735,55 @@ final class AppModel: ObservableObject {
         return "سیم \(Fmt.persianDigits(String(s.slot + 1))) · \(s.title)"
     }
 
+    // MARK: - Names (iPhone contacts first, then the Android phone's contacts)
+
     func displayName(for number: String) -> String? {
-        contacts.first { c in c.numbers.contains { Phone.same($0, number) } }?.name
+        let k = Phone.key(number)
+        guard !k.isEmpty else { return nil }
+        return iphoneContacts.byKey[k] ?? androidByKey[k]
+    }
+
+    /// Best name for a number: iPhone contact, then the name Android sent, then Android contacts.
+    func knownName(_ number: String, fallback: String) -> String {
+        let k = Phone.key(number)
+        if !k.isEmpty, let n = iphoneContacts.byKey[k] { return n }
+        if !fallback.isEmpty { return fallback }
+        return k.isEmpty ? "" : (androidByKey[k] ?? "")
+    }
+
+    private func named(_ t: SmsThread) -> SmsThread {
+        var t = t
+        t.name = knownName(t.address, fallback: t.name)
+        return t
+    }
+
+    private func named(_ c: CallLogEntry) -> CallLogEntry {
+        var c = c
+        c.name = knownName(c.number, fallback: c.name)
+        return c
+    }
+
+    /// Rebuilds the merged contact list and re-labels what is on screen.
+    private func contactsChanged() {
+        var map: [String: String] = [:]
+        for c in androidContacts {
+            for n in c.numbers { let k = Phone.key(n); if !k.isEmpty, map[k] == nil { map[k] = c.name } }
+        }
+        androidByKey = map
+        // Merge: every iPhone contact, plus Android contacts whose numbers the iPhone does not know.
+        let iphone = iphoneContacts.list
+        let known = iphoneContacts.byKey
+        var merged = iphone
+        for c in androidContacts where !c.numbers.contains(where: { known[Phone.key($0)] != nil }) {
+            merged.append(c)
+        }
+        merged.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        contacts = merged.enumerated().map { i, c in Contact(id: Int64(i + 1), name: c.name, numbers: c.numbers) }
+        threads = threads.map(named)
+        recents = recents.map(named)
+        if !call.isIdle {
+            let n = knownName(call.number, fallback: call.name)
+            if n != call.name { call.name = n }
+        }
     }
 }

@@ -1,10 +1,12 @@
 import SwiftUI
 import UserNotifications
+import Contacts
 
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @State private var confirmUnpair = false
     @State private var notifStatus: UNAuthorizationStatus = .notDetermined
+    @State private var contactsStatus: CNAuthorizationStatus = .notDetermined
 
     var body: some View {
         NavigationStack {
@@ -22,6 +24,27 @@ struct SettingsView: View {
                         row("آدرس‌ها", p.hosts.joined(separator: "، "), ltr: true)
                     }
                     Button("اتصال دوباره") { model.client.disconnect(); model.reconnect() }
+                }
+
+                Section {
+                    HStack {
+                        Label("مخاطبین آیفون", systemImage: "person.crop.circle.badge.checkmark")
+                        Spacer()
+                        Text(contactsText).foregroundStyle(model.iphoneContacts.authorized ? Theme.good : Theme.fair)
+                    }
+                    if !model.iphoneContacts.authorized {
+                        Button(contactsStatus == .notDetermined ? "اجازه دسترسی به مخاطبین" : "باز کردن تنظیمات") {
+                            if contactsStatus == .notDetermined {
+                                model.iphoneContacts.requestAccess { _ in contactsStatus = model.iphoneContacts.status }
+                            } else if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("شناسایی تماس‌گیرنده")
+                } footer: {
+                    Text("نام تماس‌گیرنده و فرستنده پیامک از مخاطبین آیفون و گوشی اندروید شناسایی می‌شود (اولویت با آیفون). مخاطبین از آیفون خارج نمی‌شوند.")
                 }
 
                 Section {
@@ -84,13 +107,26 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("تنظیمات")
-            .onAppear { refreshNotif() }
+            .onAppear {
+                refreshNotif()
+                contactsStatus = model.iphoneContacts.status
+            }
             .confirmationDialog("اتصال با این گوشی اندروید حذف شود؟", isPresented: $confirmUnpair, titleVisibility: .visible) {
                 Button("حذف اتصال", role: .destructive) { model.unpair() }
                 Button("انصراف", role: .cancel) {}
             } message: {
                 Text("برای اتصال دوباره باید QR جدید اسکن کنید. در گوشی اندروید هم می‌توانید این آیفون را از فهرست حذف کنید.")
             }
+        }
+    }
+
+    private var contactsText: String {
+        if model.iphoneContacts.authorized {
+            return "\(Fmt.persianDigits(String(model.iphoneContacts.list.count))) مخاطب"
+        }
+        switch contactsStatus {
+        case .denied, .restricted: return "اجازه داده نشده"
+        default: return "تعیین نشده"
         }
     }
 

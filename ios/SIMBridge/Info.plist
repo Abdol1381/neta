@@ -46,6 +46,8 @@
 		<string>bluetooth-central</string>
 		<string>audio</string>
 	</array>
+	<key>NSContactsUsageDescription</key>
+	<string>برای نمایش نام تماس‌گیرنده و فرستنده پیامک از مخاطبین آیفون شما. مخاطبین از گوشی خارج نمی‌شوند.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>برای اسکن کد QR اتصال به گوشی اندروید.</string>
 	<key>NSLocalNetworkUsageDescription</key>

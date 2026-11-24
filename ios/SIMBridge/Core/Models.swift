@@ -121,10 +121,19 @@ enum JSONBridge {
 }
 
 enum Phone {
-    /// Digits only, last 10 — good enough to match +98912… with 0912….
+    /// Lookup key for a phone number: ASCII digits only (Persian ۰-۹ and Arabic ٠-٩ converted), last 10.
+    /// +98 912 123 4567, 0098-912…, 0912… and ۰۹۱۲… all give "9121234567"; short codes stay whole.
     static func key(_ s: String) -> String {
-        let digits = s.filter { $0.isNumber }
-        return String(digits.suffix(10))
+        var digits = String.UnicodeScalarView()
+        for u in s.unicodeScalars {
+            switch u.value {
+            case 0x30...0x39: digits.append(u)
+            case 0x660...0x669: digits.append(Unicode.Scalar(u.value - 0x660 + 0x30)!)
+            case 0x6F0...0x6F9: digits.append(Unicode.Scalar(u.value - 0x6F0 + 0x30)!)
+            default: break
+            }
+        }
+        return String(String(digits).suffix(10))
     }
 
     static func same(_ a: String, _ b: String) -> Bool {

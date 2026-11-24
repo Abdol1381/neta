@@ -153,7 +153,8 @@ async def handler(ws):
 
         async def ring_later():
             await asyncio.sleep(2)
-            CALL.update(state="ringing", number="09121234567", name="مریم احمدی", direction="in", since=now_ms(), subId=2)
+            # A number only the iPhone's contacts know (the Android side sends no name).
+            CALL.update(state="ringing", number="+98 919 888 7766", name="", direction="in", since=now_ms(), subId=2)
             await send({"t": "call", "call": dict(CALL)})
 
         if os.path.exists(ARGS.call_flag + "_active"):
