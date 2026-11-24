@@ -18,6 +18,11 @@ struct OnboardingView: View {
                         header
                         if model.pairingStage == .idle {
                             features
+                            Text("On the Android phone, open SIMBridge and tap “اتصال آیفون” (Connect iPhone). Both phones must be on the same Wi-Fi, or the iPhone on the Android hotspot.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
                         } else {
                             PairingProgressCard()
                         }
@@ -81,10 +86,6 @@ struct OnboardingView: View {
 
     private var bottom: some View {
         VStack(spacing: 14) {
-            Text("On the Android phone, open SIMBridge and tap “اتصال آیفون” (Connect iPhone). Both phones must be on the same Wi-Fi, or the iPhone on the Android hotspot.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
             Button {
                 showScanner = true
             } label: {
@@ -112,7 +113,9 @@ struct OnboardingView: View {
             }
         }
         .padding(.horizontal, 24)
+        .padding(.top, 12)
         .padding(.bottom, 16)
+        .background(Color(uiColor: .systemBackground))
     }
 
     private var scannerSheet: some View {
