@@ -136,6 +136,22 @@ enum Phone {
         return String(String(digits).suffix(10))
     }
 
+    /// International form for iMessage: 0912… -> +98912…, 0098… -> +98…; others unchanged.
+    static func international(_ s: String) -> String {
+        let t = s.filter { !$0.isWhitespace && $0 != "-" && $0 != "(" && $0 != ")" }
+        let ascii = String(t.unicodeScalars.map { u -> Character in
+            switch u.value {
+            case 0x660...0x669: return Character(Unicode.Scalar(u.value - 0x660 + 0x30)!)
+            case 0x6F0...0x6F9: return Character(Unicode.Scalar(u.value - 0x6F0 + 0x30)!)
+            default: return Character(u)
+            }
+        })
+        if ascii.hasPrefix("+") || ascii.contains("@") { return ascii }
+        if ascii.hasPrefix("00") { return "+" + ascii.dropFirst(2) }
+        if ascii.hasPrefix("09"), ascii.count == 11 { return "+98" + ascii.dropFirst() }
+        return ascii
+    }
+
     static func same(_ a: String, _ b: String) -> Bool {
         let ka = key(a), kb = key(b)
         if ka.isEmpty || kb.isEmpty { return a == b }

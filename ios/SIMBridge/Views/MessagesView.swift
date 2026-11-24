@@ -94,6 +94,8 @@ struct ConversationView: View {
     var thread: SmsThread
     @State private var text = ""
     @State private var subId: Int?
+    @State private var useIMessage = false
+    @State private var composer: ComposerTarget?
     @State private var loading = true
     @FocusState private var focused: Bool
 
@@ -145,11 +147,17 @@ struct ConversationView: View {
             if subId == nil { subId = list.last(where: { ($0.subId ?? -1) >= 0 })?.subId }
         }
         .onDisappear { if model.openThreadId == thread.threadId { model.markThreadOpened(nil) } }
+        .sheet(item: $composer) { t in
+            MessageComposer(recipients: t.recipients, body: t.body) { result in
+                if result != .sent { text = t.body } // keep the draft if the user cancelled
+            }
+            .ignoresSafeArea()
+        }
     }
 
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            if model.sims.count > 1 { SimPicker(subId: $subId) }
+            if model.sims.count > 1 || MessageComposer.available { SimPicker(subId: $subId, iMessage: $useIMessage) }
             TextField("پیامک", text: $text, axis: .vertical)
                 .lineLimit(1...6)
                 .focused($focused)
@@ -159,10 +167,14 @@ struct ConversationView: View {
             Button {
                 let body = text
                 text = ""
-                model.sendSms(to: thread.address, body: body, subId: subId, threadId: thread.threadId)
+                if useIMessage {
+                    composer = ComposerTarget(recipients: [thread.address], body: body)
+                } else {
+                    model.sendSms(to: thread.address, body: body, subId: subId, threadId: thread.threadId)
+                }
             } label: {
                 Image(systemName: "arrow.up.circle.fill").font(.system(size: 34))
-                    .foregroundStyle(canSend ? Theme.indigo : Color.gray.opacity(0.4))
+                    .foregroundStyle(canSend ? (useIMessage ? Color.blue : Theme.accent) : Color.gray.opacity(0.4))
             }
             .disabled(!canSend)
         }
@@ -171,7 +183,9 @@ struct ConversationView: View {
         .background(.bar)
     }
 
-    private var canSend: Bool { model.conn.isReady && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var canSend: Bool {
+        (useIMessage || model.conn.isReady) && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     private func sameDay(_ a: Int64, _ b: Int64) -> Bool {
         Fmt.persianCalendar.isDate(Fmt.date(a), inSameDayAs: Fmt.date(b))
@@ -219,21 +233,45 @@ struct Bubble: View {
 struct SimPicker: View {
     @EnvironmentObject var model: AppModel
     @Binding var subId: Int?
+    /// When given, the menu also offers sending through the iPhone's own iMessage.
+    var iMessage: Binding<Bool>? = nil
+
+    private var usingIMessage: Bool { iMessage?.wrappedValue == true }
 
     var body: some View {
         Menu {
             ForEach(model.sims) { s in
                 Button {
                     subId = s.subId
+                    iMessage?.wrappedValue = false
                 } label: {
-                    Label("سیم \(s.slot + 1) — \(s.title)", systemImage: subId == s.subId ? "checkmark" : "simcard")
+                    Label("سیم \(Fmt.persianDigits(String(s.slot + 1))) — \(s.title)",
+                          systemImage: !usingIMessage && subId == s.subId ? "checkmark" : "simcard")
+                }
+            }
+            if let iMessage, MessageComposer.available {
+                Divider()
+                Button {
+                    iMessage.wrappedValue = true
+                } label: {
+                    Label("iMessage آیفون", systemImage: usingIMessage ? "checkmark" : "message.fill")
                 }
             }
         } label: {
-            let current = model.sims.first { $0.subId == subId } ?? model.sims.first { $0.smsSim } ?? model.sims.first
-            HStack(spacing: 3) {
-                Image(systemName: "simcard.fill")
-                Text("\((current?.slot ?? 0) + 1)").font(.caption.weight(.bold))
+            Group {
+                if usingIMessage {
+                    HStack(spacing: 4) {
+                        Image(systemName: "message.fill")
+                        Text("iMessage").font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(Color.blue)
+                } else {
+                    let current = model.sims.first { $0.subId == subId } ?? model.sims.first { $0.smsSim } ?? model.sims.first
+                    HStack(spacing: 3) {
+                        Image(systemName: "simcard.fill")
+                        Text(Fmt.persianDigits(String((current?.slot ?? 0) + 1))).font(.caption.weight(.bold))
+                    }
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 9)
@@ -245,6 +283,13 @@ struct SimPicker: View {
     }
 }
 
+/// Recipients + text handed to the system Messages composer.
+struct ComposerTarget: Identifiable {
+    let id = UUID()
+    let recipients: [String]
+    let body: String
+}
+
 struct ComposeView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -253,6 +298,8 @@ struct ComposeView: View {
     @State private var text = ""
     @State private var subId: Int?
     @State private var sending = false
+    @State private var useIMessage = false
+    @State private var composer: ComposerTarget?
 
     private struct Suggestion: Identifiable {
         let name: String
@@ -294,13 +341,18 @@ struct ComposeView: View {
                 }
                 Section {
                     TextField("متن پیامک", text: $text, axis: .vertical).lineLimit(4...10)
-                    if model.sims.count > 1 {
+                    if MessageComposer.available {
+                        Toggle("ارسال با iMessage آیفون", isOn: $useIMessage)
+                    }
+                    if model.sims.count > 1 && !useIMessage {
                         Picker("سیم‌کارت", selection: Binding(get: { subId ?? defaultSub }, set: { subId = $0 })) {
                             ForEach(model.sims) { s in Text("سیم \(s.slot + 1) — \(s.title)").tag(Optional(s.subId)) }
                         }
                     }
                 } footer: {
-                    Text("پیامک از سیم‌کارت گوشی اندروید ارسال می‌شود و هزینه آن طبق تعرفه همان سیم‌کارت است.")
+                    Text(useIMessage
+                         ? "پیام با iMessage خود آیفون (Apple ID شما) فرستاده می‌شود؛ گیرنده هم باید iMessage داشته باشد."
+                         : "پیامک از سیم‌کارت گوشی اندروید ارسال می‌شود و هزینه آن طبق تعرفه همان سیم‌کارت است.")
                 }
             }
             .navigationTitle("پیام جدید")
@@ -314,16 +366,26 @@ struct ComposeView: View {
                 }
             }
             .onAppear { if to.isEmpty { to = initialNumber } }
+            .sheet(item: $composer) { t in
+                MessageComposer(recipients: t.recipients, body: t.body) { result in
+                    if result == .sent { dismiss() }
+                }
+                .ignoresSafeArea()
+            }
         }
     }
 
     private var defaultSub: Int? { (model.sims.first { $0.smsSim } ?? model.sims.first)?.subId }
 
     private var canSend: Bool {
-        model.conn.isReady && to.contains(where: { $0.isNumber }) && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        (useIMessage || model.conn.isReady) && to.contains(where: { $0.isNumber }) && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func send() {
+        if useIMessage {
+            composer = ComposerTarget(recipients: [to], body: text)
+            return
+        }
         sending = true
         let tid = model.threads.first { Phone.same($0.address, to) }?.threadId
         model.sendSms(to: to, body: text, subId: subId ?? defaultSub, threadId: tid) { ok in
