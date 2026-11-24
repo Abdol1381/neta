@@ -232,7 +232,9 @@ jobs:
           f=logs/log-android/build.log
           if [ -f "$f" ]; then grep -nE "^e: |^w: |error:|FAILED|What went wrong" "$f" | head -150 > out/errors-android.txt || true; fi
           cp logs/log-android/lint/*.txt out/ 2>/dev/null || true
-          gh run view ${{ github.run_id }} -R ${{ github.repository }} --log-failed 2>&1 | tail -n 400 > out/failed-steps.txt || true
+          for id in $(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --jq '.jobs[] | select(.conclusion=="failure") | .id' 2>/dev/null); do
+            gh api repos/${{ github.repository }}/actions/jobs/$id/logs 2>/dev/null | tail -n 250 > out/failed-job-$id.txt || true
+          done
           if [ -d tests ]; then cp -r tests out/; fi
           python3 - <<'PY' || true
           import glob

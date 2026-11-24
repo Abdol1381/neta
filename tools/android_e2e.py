@@ -42,7 +42,7 @@ def check(name, ok, detail="", required=True):
 
 
 def adb(*args, timeout=60):
-    return subprocess.run(["adb", *args], capture_output=True, text=True, timeout=timeout)
+    return subprocess.run(["adb", *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
 
 
 def shell(cmd, timeout=60):
