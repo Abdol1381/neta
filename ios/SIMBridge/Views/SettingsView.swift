@@ -55,6 +55,9 @@ struct SettingsView: View {
                     Toggle(isOn: $model.keepConnected) {
                         SettingsRow(icon: "link", color: .blue, title: "Stay Connected in Background")
                     }
+                    Toggle(isOn: $model.signalActivity) {
+                        SettingsRow(icon: "cellularbars", color: .green, title: "Signal on Lock Screen")
+                    }
                     HStack {
                         SettingsRow(icon: "dot.radiowaves.left.and.right", color: .blue, title: "Bluetooth Wake",
                                     value: model.bleConnected ? "On" : "Off")
@@ -62,7 +65,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Background")
                 } footer: {
-                    Text("Stay Connected keeps the link open in the background so calls and messages arrive instantly (an inaudible sound that never interrupts other audio; uses a little battery). Don't swipe SIMBridge away in the App Switcher, or iOS can't wake it.")
+                    Text("Stay Connected keeps the link open in the background so calls and messages arrive instantly (an inaudible sound that never interrupts other audio; uses a little battery). Don't swipe SIMBridge away in the App Switcher, or iOS can't wake it.\n\nSignal on Lock Screen shows the Android SIM's bars on the Lock Screen and in the Dynamic Island. The bars at the top of the screen belong to the iPhone's own modem; no app can change them.")
                 }
 
                 Section {

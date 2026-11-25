@@ -61,6 +61,19 @@ final class AppModel: ObservableObject {
     let audioPlayer = CallAudioPlayer()
     let callKit = CallKitManager()
     let keeper = BackgroundKeeper()
+    let liveSignal = LiveSignal()
+    /// The Android SIM's signal bars on the Lock Screen and in the Dynamic Island.
+    @Published var signalActivity: Bool = UserDefaults.standard.object(forKey: "signalActivity") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(signalActivity, forKey: "signalActivity")
+            syncLiveSignal()
+        }
+    }
+
+    private func syncLiveSignal() {
+        liveSignal.sync(status: pairing == nil ? nil : status, linked: conn.isReady, enabled: signalActivity,
+                        foreground: isForeground)
+    }
     /// Internet phone line (SIP). Forwarded SIM calls ring here with two-way audio on the iPhone.
     let sip = SipPhone()
     @Published private(set) var sipState = "off"          // off / registering / ok / failed
@@ -263,6 +276,7 @@ final class AppModel: ObservableObject {
             if conn.isReady { refreshAll() }
         }
         UIApplication.shared.applicationIconBadgeNumber = 0
+        syncLiveSignal()
     }
 
     func enterBackground() {
@@ -339,6 +353,7 @@ final class AppModel: ObservableObject {
 
     func unpair() {
         keeper.stop()
+        liveSignal.stop()
         client.reset()
         ble.stop()
         PairingStore.delete()
@@ -790,7 +805,10 @@ final class AppModel: ObservableObject {
         watchdog = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.tick() }
     }
 
+    private var lastAudioLog = Date.distantPast
+
     private func tick() {
+        syncLiveSignal()
         let hasLink = pairing != nil
         if keepConnected && (hasLink || sipAccount?.isComplete == true) && keeper.mayTouchSession() && !keeper.isRunning
             && !TestHooks.isActive {
@@ -802,6 +820,12 @@ final class AppModel: ObservableObject {
             if case .idle = conn { client.kick() }
         }
         guard call.state == "offhook" else { return }
+        // iOS stops the audio engine on route changes / interruptions: bring it back.
+        if listening { audioPlayer.ensureRunning() }
+        if listening && Date().timeIntervalSince(lastAudioLog) > 10 {
+            lastAudioLog = Date()
+            dlog("call audio: \(audioPlayer.debugLine) · last packet \(Int(Date().timeIntervalSince(lastAudioAt) * 1000))ms ago")
+        }
         // Android became ready mid-call: start now.
         if !listening && canListen { startCallAudio() }
         // No audio for a while (capture restarting, link was down…): ask again, quietly.
