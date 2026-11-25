@@ -56,6 +56,17 @@ struct CallScreen: View {
 
                 Spacer()
 
+                // A SIM call's microphone is the Android phone's: Android does not let any app send
+                // other audio into a mobile call.
+                if call.state == "offhook" {
+                    Label("Speak into the Android phone (or a headset paired to it)", systemImage: "mic.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.6))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 24)
+                }
+
                 if ringing { ringingControls } else { activeControls }
             }
             .padding(.bottom, 40)

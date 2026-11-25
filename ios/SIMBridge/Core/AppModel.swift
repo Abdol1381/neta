@@ -57,6 +57,15 @@ final class AppModel: ObservableObject {
     func toggleIphoneSpeaker() {
         iphoneSpeaker.toggle()
         audioPlayer.setSpeaker(iphoneSpeaker)
+        updateProximity()
+    }
+
+    /// Screen off when the iPhone is held to the ear, like a phone call (earpiece only).
+    private func updateProximity() {
+        let want = call.state == "offhook" && listening && !iphoneSpeaker && isForeground
+        if UIDevice.current.isProximityMonitoringEnabled != want {
+            UIDevice.current.isProximityMonitoringEnabled = want
+        }
     }
     let audioPlayer = CallAudioPlayer()
     let callKit = CallKitManager()
@@ -587,6 +596,7 @@ final class AppModel: ObservableObject {
             muted = false
             if isForeground { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.loadRecents() } }
         }
+        updateProximity()
     }
 
     private func incoming(_ raw: SmsMessage, live: Bool) {
@@ -809,6 +819,7 @@ final class AppModel: ObservableObject {
 
     private func tick() {
         syncLiveSignal()
+        updateProximity()
         let hasLink = pairing != nil
         if keepConnected && (hasLink || sipAccount?.isComplete == true) && keeper.mayTouchSession() && !keeper.isRunning
             && !TestHooks.isActive {
