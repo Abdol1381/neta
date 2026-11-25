@@ -1,0 +1,3 @@
+1080:/Users/runner/work/neta/neta/ios/SIMBridge/Core/CallKitManager.swift:137:73: warning: 'allowBluetooth' was deprecated in iOS 8.0: renamed to 'AVAudioSession.CategoryOptions.allowBluetoothHFP'
+1073:/Users/runner/work/neta/neta/ios/SIMBridge/Core/CallAudioPlayer.swift:164:76: warning: 'allowBluetooth' was deprecated in iOS 8.0: renamed to 'AVAudioSession.CategoryOptions.allowBluetoothHFP'
+1248:2026-11-25 07:41:06.399 appintentsmetadataprocessor[5668:18426] warning: Metadata extraction skipped. No AppIntents.framework dependency found.

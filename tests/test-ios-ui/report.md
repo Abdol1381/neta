@@ -1,0 +1,18 @@
+# iOS Simulator UI test
+- PASS Debug simulator build
+- PASS pairing request with verification code
+- PASS pairing completed (iOS accepted credentials)
+- PASS iOS reconnected with device key (CryptoKit <-> AES-GCM interop)
+- PASS iOS requested sync
+- PASS iOS requested threads
+- PASS iOS requested messages
+- PASS iOS requested contacts
+- PASS iOS requested calls
+- PASS pairing survives app restarts (19 reconnects)
+- PASS incoming caller identified from iPhone contacts
+- PASS iPhone contacts indexed
+- PASS iOS auto-started listening during an active call
+- PASS call audio streamed to the iPhone
+- PASS no bad auth frames
+- PASS no protocol errors
+- PASS no crash reports

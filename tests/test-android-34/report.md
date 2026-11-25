@@ -1,0 +1,85 @@
+# Android E2E (API 34)
+
+78 passed, 0 failed, 3 warnings
+
+- PASS install debug APK
+- PASS bridge service starts and listens on 8765
+- PASS pairing window opened from UI button
+- PASS pairing QR payload available
+- PASS QR contains 32-byte key and server id
+- PASS QR lists a reachable LAN address
+- PASS pair: encrypted challenge received
+- PASS pair: challenge server id matches QR
+- PASS pair: 4-digit code on Android equals code on iPhone
+- PASS pair: approved -> device credentials issued
+- PASS pair: device key is 32 bytes
+- PASS pair: used QR is refused (pairing_closed)
+- PASS device: authenticated and ready
+- PASS device: ready lists hosts and port
+- PASS ping/pong
+- PASS sync: ok
+- PASS sync: status has SIM list, battery, device, perms
+- PASS sync: all permissions granted
+- PASS antenna: at least one SIM reported
+- PASS antenna: level 0..4 and service state
+- PASS antenna: in service with signal
+- PASS antenna: operator name present
+- PASS sync: call state idle
+- PASS sync: audio state
+- PASS sync: server time
+- PASS threads: ok and list
+- PASS contacts: ok and list
+- PASS calls: ok and list
+- PASS status: ok
+- PASS messages: invalid thread rejected (bad_request)
+- PASS unknown request rejected
+- PASS send_sms: invalid number rejected
+- PASS SMS in: live event reaches iPhone
+- PASS SMS in: sender address
+- PASS SMS in: catch-up sync after wake returns it
+- PASS SMS in: appears in conversation list
+- PASS SMS in: unread counted
+- PASS SMS in: read mark from iPhone clears unread
+- PASS messages: conversation contains the SMS
+- PASS SMS out: accepted
+- PASS SMS out: delivery report 'sent'
+- WARN SMS out: message actually went over the radio (looped back) — ``
+- PASS SMS out: long Persian (multipart) message accepted
+- PASS SMS out: multipart 'sent'
+- PASS call in: ringing event
+- PASS call in: caller number shown
+- PASS call in: answer accepted
+- PASS call in: now in conversation (offhook)
+- PASS listen: refused cleanly without Shizuku
+- PASS audio pipeline: scrcpy server accepts our arguments/version
+- PASS audio pipeline: call audio bytes flow to the app side
+- PASS call: speaker request ok
+- PASS call: speaker actually on
+- PASS call: speaker off ok
+- WARN call: speaker actually off — `{'t': 'res', 'rid': 'r19', 'ok': True, 'data': {'on': True}}`
+- PASS call: mute request ok
+- PASS call: hang up accepted
+- PASS call: back to idle after hang up
+- PASS call reject: ringing
+- PASS call reject: accepted
+- PASS call reject: idle
+- PASS call reject: reported as rejected (no missed-call alert)
+- PASS missed call: ringing
+- PASS missed call: idle
+- PASS missed call: event with rejected=false
+- PASS missed call: catch-up sync lists it from call log
+- PASS call log: recent calls readable
+- PASS call out: dial accepted
+- PASS call out: offhook, direction out
+- PASS call out: dialed number shown
+- PASS call out: second dial while busy is refused
+- PASS call out: hang up accepted
+- PASS call out: idle
+- PASS USSD: handled without error (reply or operator failure)
+- WARN USSD: operator reply text — `{'t': 'res', 'rid': 'r29', 'ok': False, 'err': 'timeout'}`
+- PASS USSD: invalid code rejected
+- PASS hang up with no call -> no_call
+- PASS security: unknown device refused
+- PASS security: tampered/forged frame closes the connection
+- PASS no crash of the Android app
+- PASS app process still alive at the end

@@ -1,0 +1,2 @@
+2026-11-25 07:44:39.367 SIMBridge[8767:29298] [SIMBridge] launch (background)
+2026-11-25 07:44:41.840 SIMBridge[8767:29298] [SIMBridge] iPhone contacts indexed: 7

@@ -1,0 +1,13 @@
+2026-11-25 07:45:57.257 SIMBridge[11975:37595] [SIMBridge] launch (background)
+2026-11-25 07:45:57.917 SIMBridge[11975:37595] [SIMBridge] iPhone contacts indexed: 7
+2026-11-25 07:45:57.997 SIMBridge[11975:37595] [SIMBridge] state connecting
+2026-11-25 07:45:57.997 SIMBridge[11975:37595] [SIMBridge] link: connecting
+2026-11-25 07:45:57.998 SIMBridge[11975:37595] [SIMBridge] attempt [ws://127.0.0.1:8765/]
+2026-11-25 07:45:58.322 SIMBridge[11975:37595] [SIMBridge] race ws://127.0.0.1:8765/ -> preparing
+2026-11-25 07:45:58.323 SIMBridge[11975:37595] [SIMBridge] race ws://127.0.0.1:8765/ -> ready
+2026-11-25 07:45:58.323 SIMBridge[11975:37595] [SIMBridge] state authenticating
+2026-11-25 07:45:58.324 SIMBridge[11975:37595] [SIMBridge] link: authenticating
+2026-11-25 07:45:58.386 SIMBridge[11975:37595] [SIMBridge] recv challenge
+2026-11-25 07:45:58.426 SIMBridge[11975:37595] [SIMBridge] recv ready
+2026-11-25 07:45:58.426 SIMBridge[11975:37595] [SIMBridge] state ready
+2026-11-25 07:45:58.427 SIMBridge[11975:37595] [SIMBridge] link: ready

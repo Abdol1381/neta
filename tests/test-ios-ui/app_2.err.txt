@@ -1,0 +1,27 @@
+2026-11-25 07:44:51.001 SIMBridge[9440:31008] [SIMBridge] launch (background)
+2026-11-25 07:44:51.456 SIMBridge[9440:31008] [SIMBridge] iPhone contacts indexed: 7
+2026-11-25 07:44:51.875 SIMBridge[9440:31008] [SIMBridge] state connecting
+2026-11-25 07:44:51.875 SIMBridge[9440:31008] [SIMBridge] link: connecting
+2026-11-25 07:44:51.876 SIMBridge[9440:31008] [SIMBridge] attempt [ws://127.0.0.1:8765/]
+2026-11-25 07:44:51.949 SIMBridge[9440:31008] [SIMBridge] race ws://127.0.0.1:8765/ -> preparing
+2026-11-25 07:44:51.980 SIMBridge[9440:31008] [SIMBridge] race ws://127.0.0.1:8765/ -> ready
+2026-11-25 07:44:51.980 SIMBridge[9440:31008] [SIMBridge] state authenticating
+2026-11-25 07:44:51.981 SIMBridge[9440:31008] [SIMBridge] link: authenticating
+2026-11-25 07:44:52.035 SIMBridge[9440:31008] [SIMBridge] recv challenge
+2026-11-25 07:44:52.039 SIMBridge[9440:31008] [SIMBridge] state awaitingApproval(code: "3980")
+2026-11-25 07:44:52.040 SIMBridge[9440:31008] [SIMBridge] link: awaitingApproval(code: "3980")
+2026-11-25 07:44:58.326 SIMBridge[9440:31008] [SIMBridge] recv paired
+2026-11-25 07:44:58.346 SIMBridge[9440:31008] [SIMBridge] keychain save failed (-34018); using protected file
+2026-11-25 07:44:58.350 SIMBridge[9440:31008] [SIMBridge] state idle
+2026-11-25 07:44:58.350 SIMBridge[9440:31008] [SIMBridge] link: idle
+2026-11-25 07:45:00.130 SIMBridge[9440:31008] [SIMBridge] state connecting
+2026-11-25 07:45:00.131 SIMBridge[9440:31008] [SIMBridge] link: connecting
+2026-11-25 07:45:00.133 SIMBridge[9440:31008] [SIMBridge] attempt [ws://127.0.0.1:8765/]
+2026-11-25 07:45:00.153 SIMBridge[9440:31008] [SIMBridge] race ws://127.0.0.1:8765/ -> preparing
+2026-11-25 07:45:00.253 SIMBridge[9440:31008] [SIMBridge] race ws://127.0.0.1:8765/ -> ready
+2026-11-25 07:45:00.255 SIMBridge[9440:31008] [SIMBridge] state authenticating
+2026-11-25 07:45:00.255 SIMBridge[9440:31008] [SIMBridge] link: authenticating
+2026-11-25 07:45:00.285 SIMBridge[9440:31008] [SIMBridge] recv challenge
+2026-11-25 07:45:00.287 SIMBridge[9440:31008] [SIMBridge] recv ready
+2026-11-25 07:45:00.288 SIMBridge[9440:31008] [SIMBridge] state ready
+2026-11-25 07:45:00.288 SIMBridge[9440:31008] [SIMBridge] link: ready

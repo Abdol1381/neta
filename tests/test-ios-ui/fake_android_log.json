@@ -1,0 +1,1109 @@
+[
+ {
+  "t": 1795592672.79,
+  "kind": "listening",
+  "detail": 8765
+ },
+ {
+  "t": 1795592691.98,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "oXcOtaRBAalqPqmwCso2Ig==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592691.98,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 50319)"
+ },
+ {
+  "t": 1795592691.99,
+  "kind": "hello",
+  "detail": {
+   "t": "hello",
+   "mode": "pair",
+   "v": 1
+  }
+ },
+ {
+  "t": 1795592692.05,
+  "kind": "pair_request",
+  "detail": {
+   "name": "iPhone 16",
+   "code": "3980"
+  }
+ },
+ {
+  "t": 1795592698.32,
+  "kind": "paired",
+  "detail": "8b4b7922-37fa-44ac-a132-12aae7f36c74"
+ },
+ {
+  "t": 1795592700.24,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "kqPwsJ1b5w0vpR32Kh/2UQ==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592700.25,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 50376)"
+ },
+ {
+  "t": 1795592700.28,
+  "kind": "hello",
+  "detail": {
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "mode": "dev",
+   "t": "hello",
+   "v": 1
+  }
+ },
+ {
+  "t": 1795592700.29,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592700.29,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592700.3,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592700.3,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592700.3,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592721.78,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "uuez3blOJkYxY/8YNktHhA==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592721.79,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 50625)"
+ },
+ {
+  "t": 1795592721.8,
+  "kind": "hello",
+  "detail": {
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "v": 1,
+   "mode": "dev",
+   "t": "hello"
+  }
+ },
+ {
+  "t": 1795592721.86,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592721.97,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592721.98,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592721.99,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592721.99,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592730.13,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "MtV3l5W+lLhnlkOwBgvFuA==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592730.13,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 50684)"
+ },
+ {
+  "t": 1795592730.14,
+  "kind": "hello",
+  "detail": {
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "t": "hello",
+   "mode": "dev",
+   "v": 1
+  }
+ },
+ {
+  "t": 1795592730.18,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592730.2,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592730.2,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592730.2,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592730.2,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592737.06,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "q1tbjV4l4ZXvqNKslphudg==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592737.07,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 50721)"
+ },
+ {
+  "t": 1795592737.07,
+  "kind": "hello",
+  "detail": {
+   "v": 1,
+   "t": "hello",
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "mode": "dev"
+  }
+ },
+ {
+  "t": 1795592737.1,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592737.11,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592737.11,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592737.11,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592737.11,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592737.67,
+  "kind": "request",
+  "detail": "messages"
+ },
+ {
+  "t": 1795592743.69,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "Mu9P6/zycwujBTKn+T2LDg==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592743.69,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 50760)"
+ },
+ {
+  "t": 1795592743.73,
+  "kind": "hello",
+  "detail": {
+   "mode": "dev",
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "v": 1,
+   "t": "hello"
+  }
+ },
+ {
+  "t": 1795592743.76,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592743.84,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592743.85,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592743.85,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592743.86,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592750.92,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "dQHDSMIjbk8ihbqF4lo8pg==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592750.92,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 50803)"
+ },
+ {
+  "t": 1795592750.93,
+  "kind": "hello",
+  "detail": {
+   "v": 1,
+   "mode": "dev",
+   "t": "hello",
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74"
+  }
+ },
+ {
+  "t": 1795592750.94,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592750.97,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592750.97,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592750.97,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592750.98,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592758.18,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "+5CMoNrNdk+VXPf9cFQ7zw==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592758.24,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 50841)"
+ },
+ {
+  "t": 1795592758.38,
+  "kind": "hello",
+  "detail": {
+   "v": 1,
+   "t": "hello",
+   "mode": "dev",
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74"
+  }
+ },
+ {
+  "t": 1795592758.4,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592758.44,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592758.45,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592758.46,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592758.47,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592767.24,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "r53rCG5zZW+SLFmNJk/+ow==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592767.25,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 50887)"
+ },
+ {
+  "t": 1795592767.29,
+  "kind": "hello",
+  "detail": {
+   "v": 1,
+   "t": "hello",
+   "mode": "dev",
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74"
+  }
+ },
+ {
+  "t": 1795592767.33,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592767.34,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592767.34,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592767.34,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592767.35,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592775.16,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "FtXB24PdobFY88j3qNrncg==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592775.19,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 50926)"
+ },
+ {
+  "t": 1795592775.2,
+  "kind": "hello",
+  "detail": {
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "t": "hello",
+   "v": 1,
+   "mode": "dev"
+  }
+ },
+ {
+  "t": 1795592775.21,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592775.22,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592775.22,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592775.22,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592775.22,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592806.24,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "UryQeY+PlP2385EX5DSbrQ==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592806.29,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 51272)"
+ },
+ {
+  "t": 1795592806.39,
+  "kind": "hello",
+  "detail": {
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "t": "hello",
+   "mode": "dev",
+   "v": 1
+  }
+ },
+ {
+  "t": 1795592806.47,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592806.5,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592806.51,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592806.53,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592806.53,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592807.31,
+  "kind": "request",
+  "detail": "listen"
+ },
+ {
+  "t": 1795592811.7,
+  "kind": "audio_sent",
+  "detail": 150
+ },
+ {
+  "t": 1795592817.59,
+  "kind": "request",
+  "detail": "listen"
+ },
+ {
+  "t": 1795592821.19,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "A731OgbdgepTjcT219/8Eg==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592821.19,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 51455)"
+ },
+ {
+  "t": 1795592821.3,
+  "kind": "hello",
+  "detail": {
+   "mode": "dev",
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "v": 1,
+   "t": "hello"
+  }
+ },
+ {
+  "t": 1795592821.32,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592821.33,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592821.33,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592821.42,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592821.42,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592829.49,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "FguFMuKhL206BUepLDvZgA==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592829.52,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 51543)"
+ },
+ {
+  "t": 1795592829.56,
+  "kind": "hello",
+  "detail": {
+   "v": 1,
+   "t": "hello",
+   "mode": "dev",
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74"
+  }
+ },
+ {
+  "t": 1795592829.58,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592829.65,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592829.65,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592829.66,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592829.66,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592836.14,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "OGbC6ASheG256vESl58zuA==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592836.14,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 51595)"
+ },
+ {
+  "t": 1795592836.2,
+  "kind": "hello",
+  "detail": {
+   "mode": "dev",
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "t": "hello",
+   "v": 1
+  }
+ },
+ {
+  "t": 1795592836.21,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592836.22,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592836.22,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592836.23,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592836.23,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592836.64,
+  "kind": "request",
+  "detail": "messages"
+ },
+ {
+  "t": 1795592844.49,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "QYvSIMUnUaKqq61g1P7olw==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592844.5,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 51698)"
+ },
+ {
+  "t": 1795592844.58,
+  "kind": "hello",
+  "detail": {
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "mode": "dev",
+   "t": "hello",
+   "v": 1
+  }
+ },
+ {
+  "t": 1795592844.6,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592844.65,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592844.66,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592844.66,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592844.66,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592850.88,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "4lu0Qdxybj+5CoG1r5sovw==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592850.88,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 51767)"
+ },
+ {
+  "t": 1795592850.99,
+  "kind": "hello",
+  "detail": {
+   "mode": "dev",
+   "v": 1,
+   "t": "hello",
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74"
+  }
+ },
+ {
+  "t": 1795592851.0,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592851.01,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592851.02,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592851.06,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592851.13,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592857.86,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "AC5va2jh8qbIcpaRaL5Kgg==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592857.87,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 51878)"
+ },
+ {
+  "t": 1795592858.1,
+  "kind": "hello",
+  "detail": {
+   "v": 1,
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "t": "hello",
+   "mode": "dev"
+  }
+ },
+ {
+  "t": 1795592858.13,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592858.17,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592858.18,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592858.18,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592858.18,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592864.55,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "Br+lz1LSOZenLTZBkQ0c8w==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592864.64,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 51984)"
+ },
+ {
+  "t": 1795592864.65,
+  "kind": "hello",
+  "detail": {
+   "mode": "dev",
+   "t": "hello",
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "v": 1
+  }
+ },
+ {
+  "t": 1795592864.75,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592864.76,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592864.78,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592864.78,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592864.79,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592871.28,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "hiiwhnQaSJfj/Q46VcdH+Q==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592871.28,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 52081)"
+ },
+ {
+  "t": 1795592871.47,
+  "kind": "hello",
+  "detail": {
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "t": "hello",
+   "mode": "dev",
+   "v": 1
+  }
+ },
+ {
+  "t": 1795592871.48,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592871.61,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592871.62,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592871.63,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592871.63,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592880.56,
+  "kind": "http_request",
+  "detail": {
+   "path": "/",
+   "headers": {
+    "Host": "127.0.0.1",
+    "Sec-WebSocket-Version": "13",
+    "Upgrade": "WebSocket",
+    "Sec-WebSocket-Key": "C9BXs+jT02NtbybKBaKE+A==",
+    "Connection": "Upgrade"
+   }
+  }
+ },
+ {
+  "t": 1795592880.67,
+  "kind": "connection",
+  "detail": "('127.0.0.1', 52229)"
+ },
+ {
+  "t": 1795592880.68,
+  "kind": "hello",
+  "detail": {
+   "id": "8b4b7922-37fa-44ac-a132-12aae7f36c74",
+   "t": "hello",
+   "mode": "dev",
+   "v": 1
+  }
+ },
+ {
+  "t": 1795592880.76,
+  "kind": "ready",
+  "detail": "iPhone 16"
+ },
+ {
+  "t": 1795592880.82,
+  "kind": "request",
+  "detail": "sync"
+ },
+ {
+  "t": 1795592880.95,
+  "kind": "request",
+  "detail": "threads"
+ },
+ {
+  "t": 1795592880.98,
+  "kind": "request",
+  "detail": "calls"
+ },
+ {
+  "t": 1795592880.98,
+  "kind": "request",
+  "detail": "contacts"
+ },
+ {
+  "t": 1795592881.64,
+  "kind": "request",
+  "detail": "listen"
+ },
+ {
+  "t": 1795592885.74,
+  "kind": "audio_sent",
+  "detail": 150
+ }
+]

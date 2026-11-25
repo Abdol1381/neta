@@ -1,0 +1,491 @@
+{
+ "api": "30",
+ "results": [
+  {
+   "name": "install debug APK",
+   "ok": true,
+   "required": true,
+   "detail": "Performing Streamed Install\nSuccess\n"
+  },
+  {
+   "name": "bridge service starts and listens on 8765",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  },
+  {
+   "name": "pairing window opened from UI button",
+   "ok": true,
+   "required": false,
+   "detail": ""
+  },
+  {
+   "name": "pairing QR payload available",
+   "ok": true,
+   "required": true,
+   "detail": "no PAIR log line"
+  },
+  {
+   "name": "QR contains 32-byte key and server id",
+   "ok": true,
+   "required": true,
+   "detail": "6ba4fd6b-bb42-4bf2-8946-5d6b2815a3ff"
+  },
+  {
+   "name": "QR lists a reachable LAN address",
+   "ok": true,
+   "required": false,
+   "detail": "['10.0.2.16', '10.0.2.15']"
+  },
+  {
+   "name": "pair: encrypted challenge received",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'challenge', 'n': 'JkED2KAs4cT24pPUvBvXKA==', 'sid': '6ba4fd6b-bb42-4bf2-8946-5d6b2815a3ff', 'v': 1}"
+  },
+  {
+   "name": "pair: challenge server id matches QR",
+   "ok": true,
+   "required": true,
+   "detail": "6ba4fd6b-bb42-4bf2-8946-5d6b2815a3ff"
+  },
+  {
+   "name": "pair: 4-digit code on Android equals code on iPhone",
+   "ok": true,
+   "required": true,
+   "detail": "android=['4935'] iphone=4935"
+  },
+  {
+   "name": "pair: approved -> device credentials issued",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'paired', 'id': '7b679469-323c-499c-a1ad-83dde1b18e7e', 'key': 'C4TpF43y9+A2NMIW/CQ/tE5UNPjULBvhCvPH2OWRYX8=', 'sid': '6ba4fd6b-bb42-4bf2-8946-5d6b2815a3ff', 'name': 'Google sdk_gphone_x86_64'}"
+  },
+  {
+   "name": "pair: device key is 32 bytes",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  },
+  {
+   "name": "pair: used QR is refused (pairing_closed)",
+   "ok": true,
+   "required": true,
+   "detail": "{'_plain': True, 't': 'error', 'code': 'pairing_closed'}"
+  },
+  {
+   "name": "device: authenticated and ready",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'ready', 'sid': '6ba4fd6b-bb42-4bf2-8946-5d6b2815a3ff', 'name': 'Google sdk_gphone_x86_64', 'hosts': ['10.0.2.16', '10.0.2.15'], 'port': 8765}"
+  },
+  {
+   "name": "device: ready lists hosts and port",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'ready', 'sid': '6ba4fd6b-bb42-4bf2-8946-5d6b2815a3ff', 'name': 'Google sdk_gphone_x86_64', 'hosts': ['10.0.2.16', '10.0.2.15'], 'port': 8765}"
+  },
+  {
+   "name": "ping/pong",
+   "ok": true,
+   "required": true,
+   "detail": "2 ms"
+  },
+  {
+   "name": "sync: ok",
+   "ok": true,
+   "required": true,
+   "detail": "None"
+  },
+  {
+   "name": "sync: status has SIM list, battery, device, perms",
+   "ok": true,
+   "required": true,
+   "detail": "{\"sims\": [{\"subId\": 1, \"slot\": 0, \"carrier\": \"T-Mobile\", \"name\": \"T-Mobile\", \"number\": \"+15555215554\", \"level\": 3, \"dbm\": -100, \"net\": \"LTE\", \"gen\": \"4G\", \"service\": \"in\", \"roaming\": false, \"smsSim\": true, \"voiceSim\": true, \"dataSim\": true}], \"battery\": {\"level\": 100, \"charging\": true}, \"airplane\": false, \"device\": {\"model\": \"sdk_gphone_x86_64\", \"android\": \"11\"}, \"perms\": {\"sms\": true, \"phone\": tr"
+  },
+  {
+   "name": "sync: all permissions granted",
+   "ok": true,
+   "required": true,
+   "detail": "{'sms': True, 'phone': True, 'callLog': True, 'contacts': True}"
+  },
+  {
+   "name": "antenna: at least one SIM reported",
+   "ok": true,
+   "required": true,
+   "detail": "[{'subId': 1, 'slot': 0, 'carrier': 'T-Mobile', 'name': 'T-Mobile', 'number': '+15555215554', 'level': 3, 'dbm': -100, 'net': 'LTE', 'gen': '4G', 'service': 'in', 'roaming': False, 'smsSim': True, 'voiceSim': True, 'dataSim': True}]"
+  },
+  {
+   "name": "antenna: level 0..4 and service state",
+   "ok": true,
+   "required": true,
+   "detail": "{'subId': 1, 'slot': 0, 'carrier': 'T-Mobile', 'name': 'T-Mobile', 'number': '+15555215554', 'level': 3, 'dbm': -100, 'net': 'LTE', 'gen': '4G', 'service': 'in', 'roaming': False, 'smsSim': True, 'voiceSim': True, 'dataSim': True}"
+  },
+  {
+   "name": "antenna: in service with signal",
+   "ok": true,
+   "required": false,
+   "detail": "{'subId': 1, 'slot': 0, 'carrier': 'T-Mobile', 'name': 'T-Mobile', 'number': '+15555215554', 'level': 3, 'dbm': -100, 'net': 'LTE', 'gen': '4G', 'service': 'in', 'roaming': False, 'smsSim': True, 'voiceSim': True, 'dataSim': True}"
+  },
+  {
+   "name": "antenna: operator name present",
+   "ok": true,
+   "required": false,
+   "detail": "T-Mobile"
+  },
+  {
+   "name": "sync: call state idle",
+   "ok": true,
+   "required": true,
+   "detail": "{'state': 'idle', 'number': '', 'name': '', 'direction': '', 'since': 0, 'subId': -1}"
+  },
+  {
+   "name": "sync: audio state",
+   "ok": true,
+   "required": true,
+   "detail": "{'speaker': False, 'muted': False}"
+  },
+  {
+   "name": "sync: server time",
+   "ok": true,
+   "required": true,
+   "detail": "1795592631631"
+  },
+  {
+   "name": "threads: ok and list",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  },
+  {
+   "name": "contacts: ok and list",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  },
+  {
+   "name": "calls: ok and list",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  },
+  {
+   "name": "status: ok",
+   "ok": true,
+   "required": true,
+   "detail": "None"
+  },
+  {
+   "name": "messages: invalid thread rejected (bad_request)",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r7', 'ok': False, 'err': 'bad_request'}"
+  },
+  {
+   "name": "unknown request rejected",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r8', 'ok': False, 'err': 'unknown_request'}"
+  },
+  {
+   "name": "send_sms: invalid number rejected",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r9', 'ok': False, 'err': 'bad_request'}"
+  },
+  {
+   "name": "SMS in: live event reaches iPhone",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'sms', 'msg': {'id': 'rx-749a1a4c', 'threadId': None, 'address': '5551234', 'name': '', 'body': 'Hello SIMBridge 42', 'date': 1795592633785, 'out': False, 'status': 'ok', 'read': False, 'subId': 1}}"
+  },
+  {
+   "name": "SMS in: sender address",
+   "ok": true,
+   "required": true,
+   "detail": "5551234"
+  },
+  {
+   "name": "SMS in: catch-up sync after wake returns it",
+   "ok": true,
+   "required": true,
+   "detail": "[{'id': '1', 'threadId': 3, 'address': '5551234', 'name': '', 'body': 'Hello SIMBridge 42', 'date': 1795592632598, 'out': False, 'status': 'ok', 'read': False, 'subId': 1}]"
+  },
+  {
+   "name": "SMS in: appears in conversation list",
+   "ok": true,
+   "required": false,
+   "detail": ""
+  },
+  {
+   "name": "SMS in: unread counted",
+   "ok": true,
+   "required": false,
+   "detail": "{'threadId': 3, 'address': '5551234', 'name': '', 'snippet': 'Hello SIMBridge 42', 'date': 1795592632598, 'out': False, 'unread': 1}"
+  },
+  {
+   "name": "SMS in: read mark from iPhone clears unread",
+   "ok": true,
+   "required": true,
+   "detail": "[{'threadId': 3, 'address': '5551234', 'name': '', 'snippet': 'Hello SIMBridge 42', 'date': 1795592632598, 'out': False, 'unread': 0}]"
+  },
+  {
+   "name": "messages: conversation contains the SMS",
+   "ok": true,
+   "required": true,
+   "detail": "1"
+  },
+  {
+   "name": "SMS out: accepted",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r14', 'ok': True, 'data': {'ref': '9f9e4f2f-aeed-4314-9390-606efb75b919'}}"
+  },
+  {
+   "name": "SMS out: delivery report 'sent'",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'sms_status', 'ref': '9f9e4f2f-aeed-4314-9390-606efb75b919', 'state': 'sent'}"
+  },
+  {
+   "name": "SMS out: message actually went over the radio (looped back)",
+   "ok": true,
+   "required": false,
+   "detail": ""
+  },
+  {
+   "name": "SMS out: long Persian (multipart) message accepted",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r15', 'ok': True, 'data': {'ref': '9b70ae91-e45e-4811-be13-78d057c7731d'}}"
+  },
+  {
+   "name": "SMS out: multipart 'sent'",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'sms_status', 'ref': '9b70ae91-e45e-4811-be13-78d057c7731d', 'state': 'sent'}"
+  },
+  {
+   "name": "call in: ringing event",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'call', 'call': {'state': 'ringing', 'number': '', 'name': '', 'direction': 'in', 'since': 1795592637625, 'subId': -1}}"
+  },
+  {
+   "name": "call in: caller number shown",
+   "ok": true,
+   "required": false,
+   "detail": "{'state': 'ringing', 'number': '', 'name': '', 'direction': 'in', 'since': 1795592637625, 'subId': -1}"
+  },
+  {
+   "name": "call in: answer accepted",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r16', 'ok': True, 'data': {}}"
+  },
+  {
+   "name": "call in: now in conversation (offhook)",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'call', 'call': {'state': 'offhook', 'number': '5559876', 'name': '', 'direction': 'in', 'since': 1795592640579, 'subId': -1}}"
+  },
+  {
+   "name": "listen: refused cleanly without Shizuku",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r17', 'ok': False, 'err': 'dev_not_set_up'}"
+  },
+  {
+   "name": "audio pipeline: scrcpy server accepts our arguments/version",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  },
+  {
+   "name": "audio pipeline: call audio bytes flow to the app side",
+   "ok": true,
+   "required": false,
+   "detail": "1601536 bytes; "
+  },
+  {
+   "name": "call: speaker request ok",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r18', 'ok': True, 'data': {'on': True}}"
+  },
+  {
+   "name": "call: speaker actually on",
+   "ok": true,
+   "required": false,
+   "detail": "{'t': 'res', 'rid': 'r18', 'ok': True, 'data': {'on': True}}"
+  },
+  {
+   "name": "call: speaker off ok",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r19', 'ok': True, 'data': {'on': True}}"
+  },
+  {
+   "name": "call: speaker actually off",
+   "ok": false,
+   "required": false,
+   "detail": "{'t': 'res', 'rid': 'r19', 'ok': True, 'data': {'on': True}}"
+  },
+  {
+   "name": "call: mute request ok",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r20', 'ok': True, 'data': {'on': True}}"
+  },
+  {
+   "name": "call: hang up accepted",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r22', 'ok': True, 'data': {}}"
+  },
+  {
+   "name": "call: back to idle after hang up",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'call', 'call': {'state': 'idle', 'number': '', 'name': '', 'direction': '', 'since': 0, 'subId': -1}}"
+  },
+  {
+   "name": "call reject: ringing",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  },
+  {
+   "name": "call reject: accepted",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r23', 'ok': True, 'data': {}}"
+  },
+  {
+   "name": "call reject: idle",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'call', 'call': {'state': 'idle', 'number': '', 'name': '', 'direction': '', 'since': 0, 'subId': -1}}"
+  },
+  {
+   "name": "call reject: reported as rejected (no missed-call alert)",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'missed', 'number': '5559876', 'name': '', 'date': 1795592653774, 'rejected': True}"
+  },
+  {
+   "name": "missed call: ringing",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  },
+  {
+   "name": "missed call: idle",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'call', 'call': {'state': 'idle', 'number': '', 'name': '', 'direction': '', 'since': 0, 'subId': -1}}"
+  },
+  {
+   "name": "missed call: event with rejected=false",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'missed', 'number': '5559876', 'name': '', 'date': 1795592656342, 'rejected': False}"
+  },
+  {
+   "name": "missed call: catch-up sync lists it from call log",
+   "ok": true,
+   "required": false,
+   "detail": "[{'id': 3, 'number': '5559876', 'name': '', 'date': 1795592656094, 'duration': 0, 'type': 'missed'}]"
+  },
+  {
+   "name": "call log: recent calls readable",
+   "ok": true,
+   "required": true,
+   "detail": "[{'id': 3, 'number': '5559876', 'name': '', 'date': 1795592656094, 'duration': 0, 'type': 'missed'}, {'id': 2, 'number': '5559876', 'name': '', 'date': 1795592653720, 'duration': 0, 'type': 'rejected'}, {'id': 1, 'number': '5559876', 'name': '', 'date': 1795592637505, 'duration': 11, 'type': 'in'}]"
+  },
+  {
+   "name": "call out: dial accepted",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r26', 'ok': True, 'data': {}}"
+  },
+  {
+   "name": "call out: offhook, direction out",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'call', 'call': {'state': 'offhook', 'number': '5551212', 'name': '', 'direction': 'out', 'since': 1795592663502, 'subId': 1}}"
+  },
+  {
+   "name": "call out: dialed number shown",
+   "ok": true,
+   "required": false,
+   "detail": "{'state': 'offhook', 'number': '5551212', 'name': '', 'direction': 'out', 'since': 1795592663502, 'subId': 1}"
+  },
+  {
+   "name": "call out: second dial while busy is refused",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r27', 'ok': False, 'err': 'busy'}"
+  },
+  {
+   "name": "call out: hang up accepted",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r28', 'ok': True, 'data': {}}"
+  },
+  {
+   "name": "call out: idle",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'call', 'call': {'state': 'idle', 'number': '', 'name': '', 'direction': '', 'since': 0, 'subId': -1}}"
+  },
+  {
+   "name": "USSD: handled without error (reply or operator failure)",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r29', 'ok': False, 'err': 'ussd_failed'}"
+  },
+  {
+   "name": "USSD: operator reply text",
+   "ok": false,
+   "required": false,
+   "detail": "{'t': 'res', 'rid': 'r29', 'ok': False, 'err': 'ussd_failed'}"
+  },
+  {
+   "name": "USSD: invalid code rejected",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r30', 'ok': False, 'err': 'bad_request'}"
+  },
+  {
+   "name": "hang up with no call -> no_call",
+   "ok": true,
+   "required": true,
+   "detail": "{'t': 'res', 'rid': 'r31', 'ok': False, 'err': 'no_call'}"
+  },
+  {
+   "name": "security: unknown device refused",
+   "ok": true,
+   "required": true,
+   "detail": "{'_plain': True, 't': 'error', 'code': 'unknown_device'}"
+  },
+  {
+   "name": "security: tampered/forged frame closes the connection",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  },
+  {
+   "name": "no crash of the Android app",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  },
+  {
+   "name": "app process still alive at the end",
+   "ok": true,
+   "required": true,
+   "detail": ""
+  }
+ ]
+}

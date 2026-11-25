@@ -1,0 +1,86 @@
+API level 34
+[PASS] install debug APK - Performing Streamed Install
+Success
+
+[PASS] bridge service starts and listens on 8765 
+[PASS] pairing window opened from UI button 
+[PASS] pairing QR payload available - no PAIR log line
+[PASS] QR contains 32-byte key and server id - 71e2687c-31a9-4b75-8547-f9d327c3d80c
+[PASS] QR lists a reachable LAN address - ['10.0.2.16', '10.0.2.15']
+[PASS] pair: encrypted challenge received - {'t': 'challenge', 'n': 'iEjqYk6guRfa0Ydjp9cTkA==', 'sid': '71e2687c-31a9-4b75-8547-f9d327c3d80c', 'v': 1}
+[PASS] pair: challenge server id matches QR - 71e2687c-31a9-4b75-8547-f9d327c3d80c
+[PASS] pair: 4-digit code on Android equals code on iPhone - android=['2357'] iphone=2357
+[PASS] pair: approved -> device credentials issued - {'t': 'paired', 'id': '17fdf53c-10f5-4ac4-b830-17dbc76ccfa3', 'key': 'sRQPeK2rGYbJuzM+9rDXlS8lImRdhQshT9uFX4xmKnE=', 'sid': '71e2687c-31a9-4b75-8547-f9d327c3d80c', 'name': 'Google sdk_gphone64_x86_64'}
+[PASS] pair: device key is 32 bytes 
+[PASS] pair: used QR is refused (pairing_closed) - {'_plain': True, 't': 'error', 'code': 'pairing_closed'}
+[PASS] device: authenticated and ready - {'t': 'ready', 'sid': '71e2687c-31a9-4b75-8547-f9d327c3d80c', 'name': 'Google sdk_gphone64_x86_64', 'hosts': ['10.0.2.16', '10.0.2.15'], 'port': 8765}
+[PASS] device: ready lists hosts and port - {'t': 'ready', 'sid': '71e2687c-31a9-4b75-8547-f9d327c3d80c', 'name': 'Google sdk_gphone64_x86_64', 'hosts': ['10.0.2.16', '10.0.2.15'], 'port': 8765}
+[PASS] ping/pong - 3 ms
+[PASS] sync: ok 
+[PASS] sync: status has SIM list, battery, device, perms - {"sims": [{"subId": 1, "slot": 0, "carrier": "T-Mobile", "name": "T-Mobile", "number": "+15551234567", "level": 4, "dbm": -77, "net": "HSPA", "gen": "3G", "service": "in", "roaming": false, "smsSim": true, "voiceSim": true, "dataSim": true}], "battery": {"level": 100, "charging": true}, "airplane": 
+[PASS] sync: all permissions granted - {'sms': True, 'phone': True, 'callLog': True, 'contacts': True}
+[PASS] antenna: at least one SIM reported - [{'subId': 1, 'slot': 0, 'carrier': 'T-Mobile', 'name': 'T-Mobile', 'number': '+15551234567', 'level': 4, 'dbm': -77, 'net': 'HSPA', 'gen': '3G', 'service': 'in', 'roaming': False, 'smsSim': True, 'voiceSim': True, 'dataSim': True}]
+[PASS] antenna: level 0..4 and service state - {'subId': 1, 'slot': 0, 'carrier': 'T-Mobile', 'name': 'T-Mobile', 'number': '+15551234567', 'level': 4, 'dbm': -77, 'net': 'HSPA', 'gen': '3G', 'service': 'in', 'roaming': False, 'smsSim': True, 'voiceSim': True, 'dataSim': True}
+[PASS] antenna: in service with signal - {'subId': 1, 'slot': 0, 'carrier': 'T-Mobile', 'name': 'T-Mobile', 'number': '+15551234567', 'level': 4, 'dbm': -77, 'net': 'HSPA', 'gen': '3G', 'service': 'in', 'roaming': False, 'smsSim': True, 'voiceSim': True, 'dataSim': True}
+[PASS] antenna: operator name present - T-Mobile
+[PASS] sync: call state idle - {'state': 'idle', 'number': '', 'name': '', 'direction': '', 'since': 0, 'subId': -1}
+[PASS] sync: audio state - {'speaker': True, 'muted': False}
+[PASS] sync: server time - 1795592606975
+[PASS] threads: ok and list 
+[PASS] contacts: ok and list 
+[PASS] calls: ok and list 
+[PASS] status: ok 
+[PASS] messages: invalid thread rejected (bad_request) - {'t': 'res', 'rid': 'r7', 'ok': False, 'err': 'bad_request'}
+[PASS] unknown request rejected - {'t': 'res', 'rid': 'r8', 'ok': False, 'err': 'unknown_request'}
+[PASS] send_sms: invalid number rejected - {'t': 'res', 'rid': 'r9', 'ok': False, 'err': 'bad_request'}
+[PASS] SMS in: live event reaches iPhone - {'t': 'sms', 'msg': {'id': 'rx-dce4fcb9', 'threadId': None, 'address': '5551234', 'name': '', 'body': 'Hello SIMBridge 42', 'date': 1795592611144, 'out': False, 'status': 'ok', 'read': False, 'subId': 1}}
+[PASS] SMS in: sender address - 5551234
+[PASS] SMS in: catch-up sync after wake returns it - [{'id': '1', 'threadId': 1, 'address': '5551234', 'name': '', 'body': 'Hello SIMBridge 42', 'date': 1795592607230, 'out': False, 'status': 'ok', 'read': False, 'subId': 1}]
+[PASS] SMS in: appears in conversation list 
+[PASS] SMS in: unread counted - {'threadId': 1, 'address': '5551234', 'name': '', 'snippet': 'Hello SIMBridge 42', 'date': 1795592607230, 'out': False, 'unread': 1}
+[PASS] SMS in: read mark from iPhone clears unread - [{'threadId': 1, 'address': '5551234', 'name': '', 'snippet': 'Hello SIMBridge 42', 'date': 1795592607230, 'out': False, 'unread': 0}]
+[PASS] messages: conversation contains the SMS - 1
+[PASS] SMS out: accepted - {'t': 'res', 'rid': 'r14', 'ok': True, 'data': {'ref': 'bb88137a-c75b-4df4-9ef9-7ef3e203d0c0'}}
+[PASS] SMS out: delivery report 'sent' - {'t': 'sms_status', 'ref': 'bb88137a-c75b-4df4-9ef9-7ef3e203d0c0', 'state': 'sent'}
+[WARN] SMS out: message actually went over the radio (looped back) 
+[PASS] SMS out: long Persian (multipart) message accepted - {'t': 'res', 'rid': 'r15', 'ok': True, 'data': {'ref': '1ac48598-0ec7-49a6-9869-d69f78cb077f'}}
+[PASS] SMS out: multipart 'sent' - {'t': 'sms_status', 'ref': '1ac48598-0ec7-49a6-9869-d69f78cb077f', 'state': 'sent'}
+[PASS] call in: ringing event - {'t': 'call', 'call': {'state': 'ringing', 'number': '', 'name': '', 'direction': 'in', 'since': 1795592644868, 'subId': -1}}
+[PASS] call in: caller number shown - {'state': 'ringing', 'number': '', 'name': '', 'direction': 'in', 'since': 1795592644868, 'subId': -1}
+[PASS] call in: answer accepted - {'t': 'res', 'rid': 'r16', 'ok': True, 'data': {}}
+[PASS] call in: now in conversation (offhook) - {'t': 'call', 'call': {'state': 'offhook', 'number': '5559876', 'name': '', 'direction': 'in', 'since': 1795592647566, 'subId': -1}}
+[PASS] listen: refused cleanly without Shizuku - {'t': 'res', 'rid': 'r17', 'ok': False, 'err': 'dev_not_set_up'}
+[PASS] audio pipeline: scrcpy server accepts our arguments/version 
+[PASS] audio pipeline: call audio bytes flow to the app side - 1511424 bytes; 
+[PASS] call: speaker request ok - {'t': 'res', 'rid': 'r18', 'ok': True, 'data': {'on': True}}
+[PASS] call: speaker actually on - {'t': 'res', 'rid': 'r18', 'ok': True, 'data': {'on': True}}
+[PASS] call: speaker off ok - {'t': 'res', 'rid': 'r19', 'ok': True, 'data': {'on': True}}
+[WARN] call: speaker actually off - {'t': 'res', 'rid': 'r19', 'ok': True, 'data': {'on': True}}
+[PASS] call: mute request ok - {'t': 'res', 'rid': 'r20', 'ok': True, 'data': {'on': True}}
+[PASS] call: hang up accepted - {'t': 'res', 'rid': 'r22', 'ok': True, 'data': {}}
+[PASS] call: back to idle after hang up - {'t': 'call', 'call': {'state': 'idle', 'number': '', 'name': '', 'direction': '', 'since': 0, 'subId': -1}}
+[PASS] call reject: ringing 
+[PASS] call reject: accepted - {'t': 'res', 'rid': 'r23', 'ok': True, 'data': {}}
+[PASS] call reject: idle - {'t': 'call', 'call': {'state': 'idle', 'number': '', 'name': '', 'direction': '', 'since': 0, 'subId': -1}}
+[PASS] call reject: reported as rejected (no missed-call alert) - {'t': 'missed', 'number': '5559876', 'name': '', 'date': 1795592662034, 'rejected': True}
+[PASS] missed call: ringing 
+[PASS] missed call: idle - {'t': 'call', 'call': {'state': 'idle', 'number': '', 'name': '', 'direction': '', 'since': 0, 'subId': -1}}
+[PASS] missed call: event with rejected=false - {'t': 'missed', 'number': '5559876', 'name': '', 'date': 1795592665959, 'rejected': False}
+[PASS] missed call: catch-up sync lists it from call log - [{'id': 3, 'number': '5559876', 'name': '', 'date': 1795592665739, 'duration': 0, 'type': 'missed'}]
+[PASS] call log: recent calls readable - [{'id': 3, 'number': '5559876', 'name': '', 'date': 1795592665739, 'duration': 0, 'type': 'missed'}, {'id': 2, 'number': '5559876', 'name': '', 'date': 1795592661380, 'duration': 0, 'type': 'rejected'}, {'id': 1, 'number': '5559876', 'name': '', 'date': 1795592643659, 'duration': 11, 'type': 'in'}]
+[PASS] call out: dial accepted - {'t': 'res', 'rid': 'r26', 'ok': True, 'data': {}}
+[PASS] call out: offhook, direction out - {'t': 'call', 'call': {'state': 'offhook', 'number': '5551212', 'name': '', 'direction': 'out', 'since': 1795592673770, 'subId': 1}}
+[PASS] call out: dialed number shown - {'state': 'offhook', 'number': '5551212', 'name': '', 'direction': 'out', 'since': 1795592673770, 'subId': 1}
+[PASS] call out: second dial while busy is refused - {'t': 'res', 'rid': 'r27', 'ok': False, 'err': 'busy'}
+[PASS] call out: hang up accepted - {'t': 'res', 'rid': 'r28', 'ok': True, 'data': {}}
+[PASS] call out: idle - {'t': 'call', 'call': {'state': 'idle', 'number': '', 'name': '', 'direction': '', 'since': 0, 'subId': -1}}
+[PASS] USSD: handled without error (reply or operator failure) - {'t': 'res', 'rid': 'r29', 'ok': False, 'err': 'timeout'}
+[WARN] USSD: operator reply text - {'t': 'res', 'rid': 'r29', 'ok': False, 'err': 'timeout'}
+[PASS] USSD: invalid code rejected - {'t': 'res', 'rid': 'r30', 'ok': False, 'err': 'bad_request'}
+[PASS] hang up with no call -> no_call - {'t': 'res', 'rid': 'r31', 'ok': False, 'err': 'no_call'}
+[PASS] security: unknown device refused - {'_plain': True, 't': 'error', 'code': 'unknown_device'}
+[PASS] security: tampered/forged frame closes the connection 
+[PASS] no crash of the Android app 
+[PASS] app process still alive at the end 
+
+0 failed, 3 warnings

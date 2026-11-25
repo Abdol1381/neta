@@ -1,0 +1,16 @@
+2026-11-25 07:47:50.570 SIMBridge[17361:51202] [SIMBridge] launch (background)
+2026-11-25 07:47:51.176 SIMBridge[17361:51202] [SIMBridge] iPhone contacts indexed: 7
+2026-11-25 07:47:51.224 SIMBridge[17361:51202] [SIMBridge] state connecting
+2026-11-25 07:47:51.225 SIMBridge[17361:51202] [SIMBridge] link: connecting
+2026-11-25 07:47:51.225 SIMBridge[17361:51202] [SIMBridge] attempt [ws://127.0.0.1:8765/]
+2026-11-25 07:47:51.420 SIMBridge[17361:51202] [SIMBridge] race ws://127.0.0.1:8765/ -> preparing
+2026-11-25 07:47:51.420 SIMBridge[17361:51202] [SIMBridge] race ws://127.0.0.1:8765/ -> ready
+2026-11-25 07:47:51.420 SIMBridge[17361:51202] [SIMBridge] state authenticating
+2026-11-25 07:47:51.421 SIMBridge[17361:51202] [SIMBridge] link: authenticating
+2026-11-25 07:47:51.478 SIMBridge[17361:51202] [SIMBridge] recv challenge
+2026-11-25 07:47:51.539 SIMBridge[17361:51202] [SIMBridge] recv ready
+2026-11-25 07:47:51.540 SIMBridge[17361:51202] [SIMBridge] state ready
+2026-11-25 07:47:51.540 SIMBridge[17361:51202] [SIMBridge] link: ready
+2026-11-25 07:47:53.510 SIMBridge[17361:51202] [SIMBridge] recv call
+2026-11-25 07:47:53.511 SIMBridge[17361:51202] [SIMBridge] call idle → ringing (in) · callkit false · fg true
+2026-11-25 07:47:53.511 SIMBridge[17361:51202] [SIMBridge] caller name: دکتر صالحی
