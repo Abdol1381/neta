@@ -35,6 +35,7 @@ final class CallAudioPlayer {
     private var primed = false
     private var startedPlaying = false
     private var underruns = 0
+    private var peak: Int32 = 0
     private var lock = os_unfair_lock()
 
     init() {
@@ -133,9 +134,12 @@ final class CallAudioPlayer {
         os_unfair_lock_lock(&lock)
         let ms = count * 1000 / 16_000
         let u = underruns
+        let p = Int(peak) * 100 / 32768
+        peak = 0
         os_unfair_lock_unlock(&lock)
         let out = AVAudioSession.sharedInstance().currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
-        return "engine \(engine.isRunning ? "on" : "OFF") · buffer \(ms)ms · underruns \(u) · restarts \(restarts) · \(managed ? "callkit" : "own") · \(out)"
+        let vol = AVAudioSession.sharedInstance().outputVolume
+        return "engine \(engine.isRunning ? "on" : "OFF") · level \(p)% · volume \(Int(vol * 100))% · buffer \(ms)ms · underruns \(u) · restarts \(restarts) · \(managed ? "callkit" : "own") · \(out)"
     }
 
     /// Any thread. 16 kHz mono s16le.
@@ -147,6 +151,8 @@ final class CallAudioPlayer {
         data.withUnsafeBytes { raw in
             for i in 0..<n {
                 let v = Int16(littleEndian: raw.loadUnaligned(fromByteOffset: i * 2, as: Int16.self))
+                let a = abs(Int32(v))
+                if a > peak { peak = a }
                 ring[writeIdx] = Float(v) / 32768
                 writeIdx = (writeIdx + 1) % Self.capacity
                 if count < Self.capacity { count += 1 } else { readIdx = (readIdx + 1) % Self.capacity }

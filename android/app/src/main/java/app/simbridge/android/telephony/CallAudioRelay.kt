@@ -111,12 +111,14 @@ class CallAudioRelay(private val context: Context) {
         throw IllegalStateException(state.value)
     }
 
-    private fun runToEnd(cmd: String) {
+    private fun runToEnd(cmd: String): String {
         val p = exec(cmd)
-        val t = Thread { try { p.input.readBytes() } catch (_: Throwable) {} }
+        var out = ByteArray(0)
+        val t = Thread { try { out = p.input.readBytes() } catch (_: Throwable) {} }
         t.start()
         t.join(15_000)
         p.destroy()
+        return String(out)
     }
 
     /** Copies the scrcpy server to /data/local/tmp (shell can read the app's external files dir). */
@@ -153,7 +155,24 @@ class CallAudioRelay(private val context: Context) {
 
     private fun pump(p: ShellProc, onPcm: (ByteArray) -> Unit, onEnd: (String?) -> Unit) {
         var bytes = 0L
-        val mixer = Downmixer { chunk -> bytes += chunk.size; lastPcmAt = System.currentTimeMillis(); onPcm(chunk) }
+        var peak = 0
+        var chunks = 0
+        val mixer = Downmixer { chunk ->
+            bytes += chunk.size
+            lastPcmAt = System.currentTimeMillis()
+            var j = 0
+            while (j < chunk.size) {
+                val v = ((chunk[j].toInt() and 0xff) or (chunk[j + 1].toInt() shl 8)).toShort().toInt()
+                val a = if (v < 0) -v else v
+                if (a > peak) peak = a
+                j += 2
+            }
+            if (++chunks % 500 == 0) { // every 10 s: is there actually sound in the call audio?
+                app.simbridge.android.core.BridgeHub.log("call audio level: peak ${peak * 100 / 32768}%")
+                peak = 0
+            }
+            onPcm(chunk)
+        }
         val buf = ByteArray(7680)
         var reason: String? = "ended"
         try {
@@ -172,6 +191,13 @@ class CallAudioRelay(private val context: Context) {
         }
         p.destroy()
         app.simbridge.android.core.BridgeHub.log("call audio ended: ${if (stoppedOnRequest) "stopped" else reason} after ${bytes / 640 / 50}s")
+        if (!stoppedOnRequest && bytes < 640 * 50) {
+            // Ended almost at once: keep the capture server's own message for Diagnostics.
+            try {
+                val err = runToEnd("tail -c 400 /data/local/tmp/simbridge-audio.log 2>/dev/null; true").trim()
+                if (err.isNotEmpty()) app.simbridge.android.core.BridgeHub.log("call audio server: ${err.replace('\n', ' ')}")
+            } catch (_: Exception) {}
+        }
         onEnd(if (stoppedOnRequest) null else reason)
     }
 

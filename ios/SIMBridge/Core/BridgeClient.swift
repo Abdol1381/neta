@@ -420,7 +420,8 @@ final class BridgeClient {
         guard
               let obj = (try? JSONSerialization.jsonObject(with: plain)) as? [String: Any],
               let t = obj["t"] as? String else { return }
-        dlog("recv \(t)")
+        // Audio (50 per second), pings and status updates would flood the diagnostics log.
+        if t != "audio" && t != "pong" && t != "status" && t != "res" { dlog("recv \(t)") }
 
         switch t {
         case "challenge":
