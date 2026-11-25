@@ -5,7 +5,7 @@ import os
 /// Plays the call's downlink audio streamed from the Android phone (16 kHz mono s16le, 20 ms chunks).
 ///
 /// - Voice-call audio session (`.playAndRecord` + `.voiceChat`): plays on the earpiece like a phone
-///   call (speaker / AirPods on request) with Apple's voice processing.
+///   call (speaker / AirPods on request). Playback only: the iPhone microphone is never used.
 /// - Continuous jitter buffer: a pull-based source node reads from a ring buffer and plays silence
 ///   when nothing has arrived, so network hiccups never stop the engine (no stop/start clicks).
 /// - Self-healing: iOS silently stops an `AVAudioEngine` on route / configuration changes,
@@ -19,7 +19,6 @@ final class CallAudioPlayer {
     /// true while CallKit owns (activates/deactivates) the audio session.
     private var managed = false
     private var speaker = false
-    private var voiceProcessingSet = false
     private var observers: [NSObjectProtocol] = []
     private(set) var restarts = 0
 
@@ -88,28 +87,18 @@ final class CallAudioPlayer {
         managed = managedByCallKit
         if !managedByCallKit { activateSession() }
         resetBuffer()
-        attachSource()
-        // Apple's voice processing (as in phone calls); needs microphone access, so it is optional.
-        if !voiceProcessingSet {
-            do { try engine.outputNode.setVoiceProcessingEnabled(true) } catch { dlog("voice processing off: \(error)") }
-            voiceProcessingSet = true
+        if !attachSource() || !startEngine() {
+            rebuildEngine()
+            if !attachSource() || !startEngine() { dlog("audio engine could not start"); return }
         }
-        if !startEngine() {
-            dlog("audio engine failed — retrying without voice processing")
-            try? engine.outputNode.setVoiceProcessingEnabled(false)
-            if !startEngine() {
-                rebuildEngine()
-                attachSource()
-                if !startEngine() { dlog("audio engine could not start"); return }
-            }
-        }
+        dlog("call audio engine started (\(managed ? "callkit" : "own") session)")
         running = true
         if !managed { try? AVAudioSession.sharedInstance().overrideOutputAudioPort(speaker ? .speaker : .none) }
     }
 
     func stop() {
         guard running else { return }
-        engine.stop()
+        _ = SBTryObjC { self.engine.stop() }
         running = false
         resetBuffer()
         if !managed { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
@@ -180,29 +169,43 @@ final class CallAudioPlayer {
         }
     }
 
-    private func attachSource() {
-        guard source == nil else { return }
-        let node = AVAudioSourceNode(format: format) { [unowned self] _, _, frameCount, abl -> OSStatus in
-            self.render(frameCount, abl)
+    private func attachSource() -> Bool {
+        guard source == nil else { return true }
+        let node = AVAudioSourceNode(format: format) { [weak self] _, _, frameCount, abl -> OSStatus in
+            self?.render(frameCount, abl)
             return noErr
         }
-        engine.attach(node)
-        engine.connect(node, to: engine.mainMixerNode, format: format)
+        if let e = SBTryObjC({
+            self.engine.attach(node)
+            self.engine.connect(node, to: self.engine.mainMixerNode, format: self.format)
+        }) {
+            dlog("audio engine connect failed: \(e.name.rawValue) \(e.reason ?? "")")
+            return false
+        }
         source = node
+        return true
     }
 
     private func startEngine() -> Bool {
-        engine.prepare()
-        do { try engine.start(); return true } catch { dlog("audio engine \(error)"); return false }
+        var failure: Error?
+        if let e = SBTryObjC({ do { try self.engine.start() } catch { failure = error } }) {
+            dlog("audio engine exception: \(e.name.rawValue) \(e.reason ?? "")")
+            return false
+        }
+        if let failure { dlog("audio engine \(failure)"); return false }
+        return true
     }
 
     /// A fresh engine (after a media-server reset, or when the old one refuses to start).
     private func rebuildEngine() {
-        engine.stop()
-        if let s = source { engine.detach(s) }
+        let old = engine
+        let s = source
+        _ = SBTryObjC {
+            old.stop()
+            if let s { old.detach(s) }
+        }
         source = nil
         engine = AVAudioEngine()
-        voiceProcessingSet = false
     }
 
     /// Restarts the engine (and our own session) after iOS stopped it.
@@ -214,15 +217,7 @@ final class CallAudioPlayer {
         if engine.isRunning { return }
         if startEngine() { return }
         rebuildEngine()
-        attachSource()
-        if !voiceProcessingSet {
-            try? engine.outputNode.setVoiceProcessingEnabled(true)
-            voiceProcessingSet = true
-        }
-        if !startEngine() {
-            try? engine.outputNode.setVoiceProcessingEnabled(false)
-            if !startEngine() { dlog("call audio: restart failed, the watchdog tries again") }
-        }
+        if !attachSource() || !startEngine() { dlog("call audio: restart failed, the watchdog tries again") }
     }
 
     private func resetBuffer() {

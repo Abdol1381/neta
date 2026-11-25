@@ -561,6 +561,7 @@ final class AppModel: ObservableObject {
         c.name = knownName(c.number, fallback: c.name)
         let prev = call
         call = c
+        if c.state != prev.state { dlog("call \(prev.state) → \(c.state) (\(c.direction)) · callkit \(callKit.hasCall) · fg \(isForeground)") }
         if c.state == "ringing" { dlog("caller name: \(c.name)") }
         if c.state == "ringing" && prev.state != "ringing" {
             if useCallKit && !TestHooks.isActive {

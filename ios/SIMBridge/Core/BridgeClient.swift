@@ -51,10 +51,13 @@ func dlog(_ s: @autoclosure () -> String) {
     #endif
 }
 
-/// Recent events for Settings → Diagnostics (kept in memory, last 400 lines).
+/// Recent events for Settings → Diagnostics (last 400 lines). Also written to a file, so the log of
+/// the previous run — including a crash — is still there after iOS restarts the app.
 enum DiagLog {
     private static var lines: [String] = []
     private static let lock = NSLock()
+    private static let queue = DispatchQueue(label: "diaglog")
+    private static var handle: FileHandle?
     private static let fmt: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -62,11 +65,38 @@ enum DiagLog {
         return f
     }()
 
-    static func add(_ msg: String) {
+    static let fileURL: URL = {
+        let dir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+        return dir.appendingPathComponent("diagnostics.log")
+    }()
+
+    /// Call first thing at launch.
+    static func boot() {
+        let path = fileURL.path
+        var previous: [String] = []
+        if let data = try? Data(contentsOf: fileURL), let text = String(data: data, encoding: .utf8) {
+            previous = Array(text.split(separator: "\n", omittingEmptySubsequences: true).suffix(300)).map(String.init)
+        }
+        let crashed = previous.suffix(20).contains { $0.hasPrefix("CRASH") }
+        let header = "——— app started \(DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .medium))"
+            + (crashed ? " (the previous run CRASHED, see above) ———" : " ———")
+        let kept = previous + [header]
+        try? (kept.joined(separator: "\n") + "\n").data(using: .utf8)?.write(to: fileURL, options: .atomic)
         lock.lock()
-        lines.append(fmt.string(from: Date()) + "  " + msg)
+        lines = Array(kept.suffix(400))
+        lock.unlock()
+        handle = FileHandle(forWritingAtPath: path)
+        handle?.seekToEndOfFile()
+        SBInstallCrashLogger(path)
+    }
+
+    static func add(_ msg: String) {
+        let line = fmt.string(from: Date()) + "  " + msg
+        lock.lock()
+        lines.append(line)
         if lines.count > 400 { lines.removeFirst(lines.count - 400) }
         lock.unlock()
+        queue.async { handle?.write((line + "\n").data(using: .utf8) ?? Data()) }
     }
 
     static var text: String {

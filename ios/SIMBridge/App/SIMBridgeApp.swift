@@ -5,6 +5,8 @@ import UserNotifications
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        DiagLog.boot()
+        dlog("launch (\(UIApplication.shared.applicationState == .background ? "background" : "foreground"))")
         UNUserNotificationCenter.current().delegate = self
         AppModel.shared.launch()
         return true
